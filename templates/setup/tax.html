@@ -1,0 +1,13 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "setup/base.html" %}
+{% block step %}<h1>Sales tax</h1>
+<p class="setup-note">The rate new sales get, the name that prints next to it, and the periods the Sales Tax report offers. Tax-exempt customers and sales use a separate “exempt” location, set up for you. More locations and categories: File &gt; Tax Settings.</p>
+<form method="post">{% csrf_token %}<button class="setup-default" tabindex="-1" aria-hidden="true">Next</button>{{ form.non_field_errors }}
+<div class="setup-grid">
+{% include "setup/field.html" with field=form.charge_tax wide=True %}
+{% include "setup/field.html" with field=form.default_rate %}{% include "setup/field.html" with field=form.location_name %}
+{% include "setup/field.html" with field=form.tax_year_start_month %}{% include "setup/field.html" with field=form.filing_frequency %}
+<div class="setup-wide"><span class="helptext">Fill in the tax year and filing frequency:</span>{% for key, label in presets %} <button class="setup-button" name="preset" value="{{ key }}">{{ label }}</button>{% endfor %}</div>
+</div>
+<div class="setup-actions"><a class="setup-button" href="{{ back }}">Back</a><span class="spacer"></span><button class="setup-button primary">Next</button></div></form>
+{% endblock %}

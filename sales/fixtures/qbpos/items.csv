@@ -1,0 +1,4 @@
+Item #,Item Name,Item Description,Dept Name,Vendor Code,Attribute,Size,Regular Price,Average Unit Cost,On-Hand Qty,UPC,Alternate Lookup,Tax Code,Custom Demo Field
+101,Maple Chair,Demo dining chair,Dining,DEMO,Natural,Small,120.00,50.00,3,001234567890,CHAIR-S,Tax,ignored
+102,Maple Chair,Demo dining chair,Dining,DEMO,Natural,Large,150.00,65.50,2,001234567891,CHAIR-L,Tax,ignored
+103,Delivery,Demo delivery service,Services,,,,25.00,0.00,0,,,Non,ignored

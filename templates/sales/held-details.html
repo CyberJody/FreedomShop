@@ -1,0 +1,45 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% load printing_tags %}<style>
+.hd{padding:14px 16px;font-size:13px;display:flex;flex-direction:column;gap:12px}
+.hd-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.hd-head h2{margin:0;font-size:17px;color:var(--brand-green-dark)}
+.hd-head p{margin:3px 0;color:#485365}
+.hd-stamp{border:3px solid #b3261e;color:#b3261e;font-weight:bold;font-size:20px;letter-spacing:2px;padding:2px 12px;transform:rotate(-6deg);border-radius:4px}
+.hd table{white-space:normal}
+.hd th{position:static}
+.hd td{vertical-align:top}
+.hd .hd-desc{white-space:pre-line;color:#485365;font-size:12px}
+.hd-totals{display:grid;grid-template-columns:1fr auto;gap:4px 14px;margin:0 0 0 auto;min-width:240px}
+.hd-totals dt{text-align:right;color:#485365}.hd-totals dd{margin:0;text-align:right}
+.hd-totals .grand{font-weight:bold;font-size:15px;color:var(--brand-green-dark)}
+.hd-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;border-top:1px solid #ccc;padding-top:10px}
+.hd-actions .print-control{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.hd-actions .receipt-printer{margin:0}
+.hd-actions .print-go{display:inline-flex;width:auto;min-height:0;height:34px;margin:0;padding:7px 14px;font-size:13px;line-height:normal}
+.hd-actions .print-status{flex-basis:100%}
+.hd-note{color:#626b75;font-size:12px;margin:0}
+.hd-stamp.hd-expired{border-color:#7a4b00;color:#7a4b00;font-size:16px}
+.hd-hold{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px}
+.hd-hold .hd-expired-text{color:#b3261e;font-weight:bold}
+.hd-extend{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.hd-extend select,.hd-extend input{font-size:13px;padding:4px}
+.hd-extend .button{min-height:0;height:30px;padding:4px 10px;font-size:13px;margin:0}
+</style>
+<div class="hd">
+<div class="hd-head"><div><h2>{{ doc.customer_name|default:"(no customer)" }}</h2>
+{% if phone %}<p>{{ phone }}</p>{% endif %}
+<p>{{ doc.number_or_label }} · {{ doc.created_at|date:'n/j/Y g:i A' }} · {{ receipt_type }}</p>
+<p>{% if doc.cashier %}Cashier {{ doc.cashier }}{% endif %}{% if doc.workstation != None %} · Workstation {{ doc.workstation }}{% endif %}{% if doc.tax_location %} · {{ doc.tax_location }}{% endif %}</p></div>
+<div class="hd-stamp{% if doc.holds_stock and doc.hold_expired %} hd-expired{% endif %}" aria-label="{% if doc.holds_stock and doc.hold_expired %}Hold expired{% else %}Held{% endif %}">{% if doc.holds_stock and doc.hold_expired %}EXPIRED{% else %}HELD{% endif %}</div></div>
+<div class="hd-hold">{% if doc.holds_stock %}<strong>Hold until:</strong> {% if doc.hold_until %}{{ doc.hold_date|date:'n/j/Y' }}{% if doc.hold_expired %} — <span class="hd-expired-text">expired, items are available again</span>{% else %} — items held for {{ doc.customer_name }}{% endif %}{% else %}no expiry — items held for {{ doc.customer_name }}{% endif %}{% else %}<strong>Hold until:</strong> no stock set aside — {% if not doc.customer %}no customer (set sign){% elif doc.from_quickbooks %}brought over from QuickBooks{% else %}quote{% endif %}{% endif %}
+<form method="post" action="/pos/held/{{ doc.token }}/extend/" class="hd-extend" id="hd-extend-form">{% csrf_token %}<input type="hidden" name="next" value="{{ request.GET.urlencode }}"><label>{% if doc.holds_stock %}{% if doc.hold_expired %}Hold again for{% else %}Change hold to{% endif %}{% else %}Hold the items for{% endif %} <select name="hold_until" aria-label="New hold time">{% for value, label in hold_choices %}<option value="{{ value }}" {% if value == hold_default %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><input type="date" name="hold_date" aria-label="Custom hold-until date" hidden><button class="button" type="submit">{% if doc.holds_stock and doc.hold_expired %}Extend Hold{% elif doc.holds_stock %}Change Hold{% else %}Hold Stock{% endif %}</button></form></div>
+<table><thead><tr><th>Item Name</th><th>Description</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Ext Price</th></tr></thead><tbody>
+{% for line in lines %}<tr><td>{{ line.item_name|default:line.sku }}</td><td class="hd-desc">{{ line.description }}</td><td class="number">{{ line.quantity|qty }}</td><td class="number">${{ line.price|floatformat:2 }}</td><td class="number">${{ line.amount|floatformat:2 }}</td></tr>
+{% empty %}<tr><td colspan="5">No items on this held receipt.</td></tr>{% endfor %}
+</tbody></table>
+<dl class="hd-totals"><dt>Total Qty</dt><dd>{{ quantity|qty }}</dd><dt>Subtotal</dt><dd>${{ doc.subtotal|floatformat:2 }}</dd>{% if doc.discount %}<dt>Discount</dt><dd>−${{ doc.discount|floatformat:2 }}</dd>{% endif %}<dt>Tax{% if doc.tax_exempt %} (exempt){% endif %}</dt><dd>${{ doc.tax|default_if_none:0|floatformat:2 }}</dd><dt class="grand">Total</dt><dd class="grand">${{ doc.total|floatformat:2 }}</dd></dl>
+{% if doc.notes %}<p class="hd-desc"><strong>Comments:</strong> {{ doc.notes }}</p>{% endif %}
+<div class="hd-actions">{% print_control 'sale' doc.token 'receipt' %}<a class="button primary" href="/pos/sale/{{ doc.token }}/">Unhold</a><button class="button" type="button" data-held-action="delete">Delete</button></div>
+<p class="hd-note">Unhold opens the receipt in Make a Sale. Finishing it there makes it a regular sales receipt and takes the items out of On Hand once; a hold for a real customer only keeps them out of Available until then. Set signs, quotes and held receipts brought over from QuickBooks hold nothing.</p>
+<script>(()=>{const form=document.getElementById('hd-extend-form');if(!form)return;const select=form.querySelector('select[name=hold_until]'),date=form.querySelector('input[name=hold_date]');const sync=()=>{date.hidden=select.value!=='custom';date.required=!date.hidden;if(!date.hidden&&!date.value){const d=new Date();d.setDate(d.getDate()+7);date.value=d.toISOString().slice(0,10);}};select.addEventListener('change',sync);sync();})();</script>
+</div>

@@ -1,0 +1,15 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<div class="print-control" data-print-url="{{ print_url }}" data-pdf-url="{{ pdf_url }}" data-kind="{{ kind }}"><label class="receipt-printer">Print to<select class="print-target" aria-label="Printer">{% for label, printers in groups %}<optgroup label="{{ label }}">{% for printer in printers %}<option value="{{ printer.pk }}" {% if selected == printer.pk|stringformat:"s" %}selected{% endif %}>{{ printer.name }}</option>{% endfor %}</optgroup>{% endfor %}<optgroup label="File"><option value="{{ pdf }}" {% if selected == pdf %}selected{% endif %}>Create PDF</option></optgroup></select></label><button class="shortcut print-go" type="button">{{ label }}</button><div class="print-status" role="status" hidden></div><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"></div>
+<script>
+(()=>{const box=document.currentScript.previousElementSibling,select=box.querySelector('.print-target'),button=box.querySelector('.print-go'),status=box.querySelector('.print-status');
+const csrf=box.querySelector('[name=csrfmiddlewaretoken]').value,show=(text,bad)=>{status.textContent=text;status.hidden=false;status.classList.toggle('bad',!!bad);};
+const label=()=>{button.textContent=select.value==='pdf'?'Create PDF':'{{ label }}';};label();
+select.addEventListener('change',()=>{label();status.hidden=true;fetch('/print/choice/',{method:'POST',headers:{'X-CSRFToken':csrf},body:new URLSearchParams({kind:box.dataset.kind,target:select.value})}).catch(()=>{});});
+button.addEventListener('click',async()=>{
+ if(select.value==='pdf'){window.open(box.dataset.pdfUrl,'_blank','noopener');show('PDF opened in a new tab.');fetch('/print/choice/',{method:'POST',headers:{'X-CSRFToken':csrf},body:new URLSearchParams({kind:box.dataset.kind,target:'pdf'})}).catch(()=>{});return;}
+ button.disabled=true;show('Sending to '+select.options[select.selectedIndex].text+'…');
+ try{const r=await fetch(box.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':csrf},body:new URLSearchParams({target:select.value})});
+  const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);}
+ catch{show('Could not reach the app server. Check the connection before retrying.',true);}
+ finally{button.disabled=false;}});})();
+</script>

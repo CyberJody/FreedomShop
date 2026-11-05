@@ -1,0 +1,44 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% load report_tags %}{% block extra_style %}<style>
+.report-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,max-content));gap:14px;align-items:end;padding:12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf}
+.report-options .field select{min-width:280px}.report-options .buttons{display:flex;gap:8px;align-items:center}
+.export-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px}.export-bar .label{margin-right:4px;color:#485365}.export-bar .summary{margin-left:auto;color:#485365}.export-bar select{padding:6px;min-width:200px;font:inherit;border:1px solid #aeb7c3;border-radius:2px;background:white}.export-bar .print-status{font-size:12px;color:#2f6b3f}.export-bar .print-status.bad{color:#923328}
+.report-table td,.report-table th{white-space:normal}.report-table .group td{background:var(--brand-tint)!important;font-weight:bold;color:var(--brand-green-dark)}.report-table .subtotal td{background:#f3f3f3!important;font-weight:bold;border-top:1px solid #aaa}.report-table .grand td{background:#fff!important;font-weight:bold;font-size:14px;border-top:2px solid var(--brand-green)}.report-table .description{min-width:260px}.summary-table .number{white-space:nowrap}.report-table .group a{color:inherit}.report-table tr.discounted td{color:#c00000}.report-note .mark{color:#c00000;font-weight:bold;font-size:15px}.report-note{padding:8px 12px;font-weight:bold;font-size:13px;background:#fff;border-top:1px solid #ccc}.report-heading{display:none}
+@media print{.report-heading{display:block;padding:8px 10px;font-size:13px}.export-bar,.report-options{display:none!important}}
+</style>{% endblock %}{% block task_shortcuts %}<a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/reports/sales-tax/">Sales Tax</a><a class="shortcut" href="/pos/history/">Sales History</a><a class="shortcut" href="/purchasing/vendors/">Vendor List</a><a class="shortcut" href="/">Home</a>{% endblock %}{% block content %}
+<form method="get" class="report-options">
+<label class="field">Vendor<select name="vendor"><option value="">All vendors</option>{% for v in vendors %}<option value="{{ v.pk }}" {% if vendor and vendor.pk == v.pk %}selected{% endif %}>{{ v.company }}</option>{% endfor %}</select></label>
+<label class="field">Show<select name="view">{% for key, label in views %}<option value="{{ key }}" {% if key == view %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field">From<input type="date" name="start" value="{{ start|date:'Y-m-d' }}" required></label>
+<label class="field">Through<input type="date" name="end" value="{{ end|date:'Y-m-d' }}" required></label>
+<div class="buttons"><button class="button primary" name="run" value="1">Display Report</button><a class="button" href="/reports/sales-by-vendor/">Reset</a></div>
+</form>
+{% if report %}
+<div class="export-bar" id="export-bar" data-print-url="/reports/sales-by-vendor/print/"><span class="label">Save as</span><a class="button" href="?{{ params }}&amp;format=xlsx">Excel</a><a class="button" href="?{{ params }}&amp;format=pdf">PDF</a><button class="button" type="button" id="direct-print" {% if not printers %}disabled title="No Letter printers are set up"{% endif %}>Direct Print</button><select id="report-printer" aria-label="Printer" {% if not printers %}disabled{% endif %}>{% for p in printers %}<option value="{{ p.pk }}" {% if selected_printer == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No Letter printers</option>{% endfor %}</select><span class="print-status" id="print-status" role="status" hidden></span><span class="summary">{{ report.subtitle }} · {{ report.receipts }} receipt{{ report.receipts|pluralize }}{% if view == 'detail' %} · {{ report.lines }} line{{ report.lines|pluralize }}{% endif %}</span></div>
+<form id="print-options" hidden>{% csrf_token %}<input type="hidden" name="vendor" value="{{ vendor.pk|default:'' }}"><input type="hidden" name="start" value="{{ start|date:'Y-m-d' }}"><input type="hidden" name="end" value="{{ end|date:'Y-m-d' }}"><input type="hidden" name="view" value="{{ view }}"></form>
+<div class="report-heading"><strong>{{ business.name }} — {{ report.title }}</strong><br>{{ report.subtitle }}</div>
+{% if view != 'detail' %}<div class="table-scroll"><table class="report-table summary-table"><thead><tr>{% for c in report.columns %}<th{% if c.kind != 'text' %} class="number"{% endif %}>{{ c.label }}</th>{% endfor %}</tr></thead><tbody>
+{% for g in report.groups %}{% if report.grouped %}<tr class="group"><td colspan="{{ report.columns|length }}">{% if not vendor and g.vendor_pk %}<a href="?view=items&amp;vendor={{ g.vendor_pk }}&amp;start={{ start|date:'Y-m-d' }}&amp;end={{ end|date:'Y-m-d' }}&amp;run=1">{{ g.label }}</a>{% else %}{{ g.label }}{% endif %}</td></tr>{% endif %}
+{% for r in g.rows %}<tr>{% for c in report.columns %}<td{% if c.kind != 'text' %} class="number"{% elif c.key == 'description' %} class="description"{% endif %}>{% if c.key == 'vendor' and r.vendor_pk %}<a href="?view=items&amp;vendor={{ r.vendor_pk }}&amp;start={{ start|date:'Y-m-d' }}&amp;end={{ end|date:'Y-m-d' }}&amp;run=1" title="Show this vendor's items">{{ r.vendor }}</a>{% elif c.kind == 'qty' %}{{ r.quantity|qty }}{% else %}{% cell r c %}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+{% if report.grouped %}<tr class="subtotal">{% total_row report g.totals 'Total '|add:g.label %}</tr>{% endif %}{% endfor %}
+<tr class="grand">{% total_row report report.totals 'Grand total' %}</tr>
+</tbody></table><div class="report-note">{{ report.notes.0 }}</div>{% if not report.lines %}<div class="empty"><strong>No item sales in this range</strong>Widen the dates or choose All vendors.</div>{% endif %}</div>
+{% else %}<div class="table-scroll"><table class="report-table"><thead><tr><th>Date</th><th>Receipt #</th><th>Customer</th><th>Item #</th><th>Item Name</th><th>Description</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Ext Price</th></tr></thead><tbody>
+{% for g in report.groups %}<tr class="group"><td colspan="9">{{ g.vendor }}</td></tr>
+{% for r in g.rows %}<tr{% if r.discounted %} class="discounted"{% endif %}><td>{{ r.date|date:'n/j/Y' }}</td><td>{{ r.receipt }}</td><td>{{ r.customer }}</td><td>{{ r.sku }}</td><td>{{ r.name }}</td><td class="description">{{ r.description }}</td><td class="number">{{ r.quantity|qty }}</td><td class="number">{{ r.price|price }}</td><td class="number">{{ r.amount|dollars }}</td></tr>{% endfor %}
+<tr class="subtotal"><td colspan="6">Total {{ g.vendor }}</td><td class="number">{{ g.quantity|qty }}</td><td></td><td class="number">{{ g.amount|dollars }}</td></tr>
+{% endfor %}
+<tr class="grand"><td colspan="6">Grand total</td><td class="number">{{ report.quantity|qty }}</td><td></td><td class="number">{{ report.amount|dollars }}</td></tr>
+</tbody></table>{% if report.discounted_lines %}<div class="report-note"><span class="mark">*</span> Sold at Discounted Price</div>{% endif %}{% if not report.groups %}<div class="empty"><strong>No item sales in this range</strong>Widen the dates or choose All vendors.</div>{% endif %}</div>{% endif %}
+{% elif not ran %}
+<div class="empty"><strong>Sales by Vendor</strong>Items sold on completed sales receipts, grouped by the vendor each item came from. <em>Summary by item</em> totals each item (like QuickBooks' Vendor Sales Summary drill-down); <em>Vendor totals</em> is one line per vendor (click a vendor to see its items); <em>Detail</em> lists every receipt line. Choose a vendor (or all), pick the dates, then Display Report.</div>
+{% endif %}
+{% endblock %}{% block scripts %}{% if report %}<script>
+(()=>{const bar=document.getElementById('export-bar'),button=document.getElementById('direct-print'),select=document.getElementById('report-printer'),status=document.getElementById('print-status'),form=document.getElementById('print-options');
+if(!button||button.disabled)return;const show=(text,bad)=>{status.textContent=text;status.hidden=false;status.classList.toggle('bad',!!bad);};
+button.addEventListener('click',async()=>{const body=new URLSearchParams(new FormData(form));body.set('printer',select.value);button.disabled=true;show('Sending to '+select.options[select.selectedIndex].text+'…');
+ try{const r=await fetch(bar.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrfmiddlewaretoken]').value},body});
+  const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);}
+ catch{show('Could not reach the app server. Check the connection before retrying.',true);}
+ finally{button.disabled=false;}});})();
+</script>{% endif %}{% endblock %}

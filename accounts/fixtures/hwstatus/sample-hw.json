@@ -1,0 +1,72 @@
+{
+ "generated": "2026-10-16T09:20:53.644339+00:00",
+ "host": "sample-server",
+ "event": "TestMessage /dev/md/root",
+ "raid": [
+  {
+   "device": "/dev/md127",
+   "name": "sample-server:root  (local to host sample-server)",
+   "level": "raid1",
+   "size": "498925568 (475.81 GiB 510.90 GB)",
+   "state": "active",
+   "raid_devices": 2,
+   "active_devices": 2,
+   "failed_devices": 0,
+   "degraded": false,
+   "sync_action": "idle",
+   "sync_progress_pct": null,
+   "mismatch_cnt": 0,
+   "members": [
+    {
+     "device": "/dev/sdb2",
+     "state": "active sync"
+    },
+    {
+     "device": "/dev/sda2",
+     "state": "active sync"
+    }
+   ]
+  }
+ ],
+ "disks": [
+  {
+   "device": "/dev/sda",
+   "model": "ExampleDisk Model 500",
+   "serial": "DEMO-DISK-001",
+   "size": "476.9G",
+   "smart": "PASSED",
+   "temperature_c": 40,
+   "detail": "",
+   "reallocated_sectors": 0,
+   "pending_sectors": null,
+   "power_on_hours": 79
+  },
+  {
+   "device": "/dev/sdb",
+   "model": "ExampleDisk Model 500",
+   "serial": "DEMO-DISK-002",
+   "size": "476.9G",
+   "smart": "PASSED",
+   "temperature_c": 40,
+   "detail": "",
+   "reallocated_sectors": 0,
+   "pending_sectors": null,
+   "power_on_hours": 79
+  }
+ ],
+ "cert": {
+  "path": "/etc/letsencrypt/live/shop.example.com/cert.pem",
+  "not_after": "2027-01-13T22:48:33+00:00",
+  "days_left": 89
+ },
+ "backup": {
+  "freedomshop-hourly-backup": {
+   "Result": "success",
+   "ExecMainStartTimestamp": "Fri 2026-10-16 05:00:24 EDT",
+   "ExecMainExitTimestamp": "Fri 2026-10-16 05:00:35 EDT",
+   "ExecMainStatus": "0",
+   "ActiveState": "inactive"
+  },
+  "timer_active": "active"
+ }
+}

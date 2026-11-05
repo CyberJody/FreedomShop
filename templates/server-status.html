@@ -1,0 +1,28 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block extra_style %}<style>
+.status-wrap{overflow:auto;padding:12px 14px;flex:1}
+.status-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:4px;margin-bottom:12px;font-weight:bold;font-size:15px}
+.status-banner .dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}.status-banner small{font-weight:normal;color:#485365;margin-left:auto}
+.state-ok .dot{background:#2f8f4e}.state-warn .dot{background:#d99a1a}.state-bad .dot{background:#c00000}.state-muted .dot{background:#9aa3ad}
+.status-banner.state-ok{background:#e7f0e9;border:1px solid #b8cec0}.status-banner.state-warn{background:#fff4d6;border:1px solid #d99a1a}.status-banner.state-bad{background:#fbe3e3;border:1px solid #c00000}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}
+.status-card{border:1px solid var(--brand-border);border-radius:6px;background:#fff;overflow:hidden}
+.status-card h2{margin:0;padding:8px 12px;background:var(--brand-green);color:#fff;font-size:14px}
+.status-card table{width:100%;border-collapse:collapse;font-size:13px;white-space:normal}
+.status-card th{text-align:left;font-weight:normal;color:#485365;width:38%;padding:7px 10px;background:#fff;position:static;border:0;border-bottom:1px solid #eee;vertical-align:top}
+.status-card td{padding:7px 10px;border-bottom:1px solid #eee;vertical-align:top}
+.status-card tr:last-child th,.status-card tr:last-child td{border-bottom:0}
+.status-card td .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.status-card td.state-ok .dot{background:#2f8f4e}.status-card td.state-warn .dot{background:#d99a1a}.status-card td.state-bad .dot{background:#c00000}.status-card td.state-muted .dot{background:#c3c9cf}
+.status-card td.state-bad{color:#8a1f1f;font-weight:bold}.status-card td.state-warn{color:#7a5a0a}.status-card td.state-muted{color:#6b7480}
+.status-card td small{display:block;color:#6b7480;font-weight:normal;margin-top:2px}
+.status-card .note{padding:8px 12px;font-size:12px;color:#485365;background:var(--brand-surface);border-top:1px solid #e3e8e5;line-height:1.5}
+.status-tools{display:flex;gap:10px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px}.status-tools .right{margin-left:auto;color:#485365}
+</style>{% endblock %}{% block task_shortcuts %}<a class="shortcut" href="/">Home</a><a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/printers/">Printers</a>{% endblock %}{% block content %}
+<div class="status-tools"><a class="button" href="/server-status/?refresh=1">Refresh now</a><span class="right">Read-only view · gathered {{ gathered_at|date:"n/j/Y g:i:s A" }} · rechecked automatically every minute</span></div>
+<div class="status-wrap">
+<div class="status-banner state-{{ state }}"><span class="dot"></span>{{ summary }}<small>Green = OK · Amber = watch · Red = needs attention · Grey = not readable from the app</small></div>
+<div class="status-grid">
+{% for s in sections %}<section class="status-card"><h2>{{ s.title }}</h2><table>{% for i in s.items %}<tr><th>{{ i.label }}</th><td class="state-{{ i.state }}"><span class="dot"></span>{{ i.value }}{% if i.detail %}<small>{{ i.detail }}</small>{% endif %}</td></tr>{% endfor %}</table>{% if s.note %}<div class="note">{{ s.note }}</div>{% endif %}</section>{% endfor %}
+</div></div>
+{% endblock %}

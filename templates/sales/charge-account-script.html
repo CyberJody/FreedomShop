@@ -1,0 +1,21 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<script>
+// Shared by the register and sales-order payment forms.
+window.turnOnChargeAccount=async function(id,name,csrf){
+ const dialog=document.getElementById('confirm-dialog');
+ const yes=dialog.querySelector('[value="confirm"]'),no=dialog.querySelector('[value="cancel"]');
+ const heading=dialog.querySelector('h2');const labels=[yes.textContent,no.textContent,heading?heading.textContent:''];
+ if(heading)heading.textContent='Charge Account';
+ document.getElementById('confirm-message').textContent=`Turn on Charge Account for ${name}?`;
+ yes.textContent='Turn On';no.textContent='Cancel';dialog.returnValue='cancel';
+ const confirmed=await new Promise(resolve=>{
+  dialog.addEventListener('close',()=>{yes.textContent=labels[0];no.textContent=labels[1];if(heading)heading.textContent=labels[2];resolve(dialog.returnValue==='confirm');},{once:true});
+  dialog.showModal();
+ });
+ if(!confirmed)return null;
+ const response=await fetch(`/customers/${id}/charge-account/`,{method:'POST',headers:{'X-CSRFToken':csrf}});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok||!data.ok)throw Error(data.error||'Could not turn on Charge Account. Try again.');
+ return data;
+};
+</script>

@@ -1,0 +1,34 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "settings/base.html" %}{% block content %}<div class="settings-wrap">
+{% if saved %}<p class="success" role="status">{{ saved }}</p>{% endif %}{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if not settings_row.tax_year_start_month %}<p class="error" role="alert">Choose the tax year start month below before running reports or importing history.</p>{% endif %}
+<section class="settings-panel" id="general" aria-labelledby="general-title"><h2 id="general-title">General</h2>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="general">{{ general.non_field_errors }}{% for hidden in general.hidden_fields %}{{ hidden }}{% endfor %}
+<div class="settings-grid">{% for field in general.visible_fields %}<div>{% if field.field.widget.input_type == 'checkbox' %}{{ field }} {{ field.label_tag }}{% else %}{{ field.label_tag }}{{ field }}{% endif %}{{ field.errors }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}
+<div><label>Rounding</label><span class="readonly">{{ settings_row.get_rounding_display }}</span><span class="helptext">Tax is worked out per rate on the exact taxable amount and rounded once to the cent.</span></div></div>
+<div class="actions"><button class="button primary">Save General Settings</button></div></form></section>
+
+<section class="settings-panel" id="locations" aria-labelledby="locations-title"><h2 id="locations-title">Tax Locations</h2>
+<p class="helptext">Each sale is filed under a location: the default one, or the exempt one for a tax-exempt sale or customer. The Sales Tax report has one section per active location. A location on past sales can be retired but never deleted, and its name never changes.</p>
+<table class="settings-table"><thead><tr><th>Name</th><th>Rate (%)</th><th>Receipt label</th><th>Report section</th><th>Sort</th><th>Status</th><th></th></tr></thead><tbody>
+{% for loc in locations %}<tr class="{% if not loc.row.active %}retired{% endif %}"><td>{{ loc.row.name }}{% if loc.default %}<span class="tag">Default</span>{% endif %}{% if loc.row.is_exempt %}<span class="tag">Exempt</span>{% endif %}</td>
+<td>{{ loc.form.rate.as_widget }}{{ loc.form.rate.errors }}</td><td>{{ loc.form.label.as_widget }}</td><td>{{ loc.form.report_label.as_widget }}</td><td>{{ loc.form.sort.as_widget }}</td>
+<td>{{ loc.row.active|yesno:'Active,Retired' }}{% if loc.in_use %}<span class="tag">In use</span>{% endif %}</td>
+<td class="actions"><form method="post" id="loc-{{ loc.row.pk }}">{% csrf_token %}<input type="hidden" name="action" value="location"><input type="hidden" name="pk" value="{{ loc.row.pk }}"><button class="button">Save</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="pk" value="{{ loc.row.pk }}">{% if loc.row.active %}<button class="button" name="action" value="location-retire">Retire</button>{% else %}<button class="button" name="action" value="location-restore">Restore</button>{% endif %}{% if not loc.in_use %}<button class="button" name="action" value="location-delete">Delete</button>{% endif %}</form></td></tr>{% endfor %}
+</tbody></table>
+<form method="post" class="settings-grid" style="margin-top:12px">{% csrf_token %}<input type="hidden" name="action" value="add-location">
+{% for field in new_location.visible_fields %}<div>{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}<div class="actions"><button class="button primary">Add Location</button></div></form></section>
+
+<section class="settings-panel" id="categories" aria-labelledby="categories-title"><h2 id="categories-title">Tax Categories</h2>
+<p class="helptext">Departments pick a category on their own screen (Department List); a non-taxable category always means 0 %. A category on departments or items can be retired but never deleted, and its name never changes.</p>
+<table class="settings-table"><thead><tr><th>Name</th><th>Taxable</th><th>Default rate (%)</th><th>Sort</th><th>Departments</th><th>Status</th><th></th></tr></thead><tbody>
+{% for cat in categories %}<tr class="{% if not cat.row.active %}retired{% endif %}"><td>{{ cat.row.name }}</td>
+<td>{{ cat.form.taxable.as_widget }}{{ cat.form.taxable.errors }}</td><td>{{ cat.form.default_rate.as_widget }}</td><td>{{ cat.form.sort.as_widget }}</td><td>{{ cat.departments }}</td>
+<td>{{ cat.row.active|yesno:'Active,Retired' }}{% if cat.in_use %}<span class="tag">In use</span>{% endif %}</td>
+<td class="actions"><form method="post" id="cat-{{ cat.row.pk }}">{% csrf_token %}<input type="hidden" name="action" value="category"><input type="hidden" name="pk" value="{{ cat.row.pk }}"><button class="button">Save</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="pk" value="{{ cat.row.pk }}">{% if cat.row.active %}<button class="button" name="action" value="category-retire">Retire</button>{% else %}<button class="button" name="action" value="category-restore">Restore</button>{% endif %}{% if not cat.in_use %}<button class="button" name="action" value="category-delete">Delete</button>{% endif %}</form></td></tr>{% endfor %}
+</tbody></table>
+<form method="post" class="settings-grid" style="margin-top:12px">{% csrf_token %}<input type="hidden" name="action" value="add-category">
+{% for field in new_category.visible_fields %}<div>{% if field.field.widget.input_type == 'checkbox' %}{{ field }} {{ field.label_tag }}{% else %}{{ field.label_tag }}{{ field }}{% endif %}{{ field.errors }}</div>{% endfor %}<div class="actions"><button class="button primary">Add Category</button></div></form></section>
+</div>{% endblock %}

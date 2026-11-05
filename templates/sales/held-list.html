@@ -1,0 +1,82 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block content %}<style>
+.held-split{display:flex;flex:1;min-height:0}
+.held-split>.table-scroll{flex:1;min-width:0}
+#held-details{flex:0 0 46%;max-width:760px;border-left:2px solid var(--brand-border);background:#fafafa;overflow:auto;display:flex;flex-direction:column}
+#held-details[hidden]{display:none}
+#held-details .hd-empty{padding:40px 20px;text-align:center;color:#677385}
+#list-scroll tbody tr{cursor:default}
+#list-scroll tbody tr.held-selected td{background:#d7efb9!important}
+.held-tools .button:disabled{opacity:.55}
+.held-tools .action-menu>div button:disabled{color:#999;cursor:default;background:white}
+.held-message{padding:8px 12px;background:#e7f5d6;color:#365424;border-bottom:1px solid #c1d4ac;font-size:13px}
+.held-message.bad{background:#fff0ee;color:#923328;border-color:#e0ada5}
+td.hold-expired{color:#b3261e;font-weight:bold}
+</style>
+{% if request.GET.deleted %}<div class="held-message" role="status">Deleted a held receipt{% if request.GET.deleted %} for {{ request.GET.deleted }}{% endif %}. Any items it held are available again.</div>{% endif %}{% if request.GET.extended %}<div class="held-message" role="status">Hold changed — {{ request.GET.extended }}.</div>{% endif %}{% if request.GET.error %}<div class="held-message bad" role="alert">{{ request.GET.error }}</div>{% endif %}
+<div class="tools held-tools"><details class="action-menu"><summary class="want">I Want To…</summary><div>
+<button type="button" data-held-action="details">Show/Hide Details (F8)</button>
+<button type="button" data-held-action="reprint" data-needs-selection disabled>Reprint</button>
+<button type="button" data-held-action="unhold" data-needs-selection disabled>Unhold</button>
+<button type="button" data-held-action="delete" data-needs-selection disabled>Delete</button>
+<a href="/pos/sale/new/">Make a Sale</a>
+<a href="/pos/order/new/">Make a Customer Order</a>
+</div></details>
+<button class="button" type="button" data-held-action="details" id="held-details-button" aria-pressed="false">Show Details</button>
+<button class="button primary" type="button" data-held-action="unhold" data-needs-selection disabled>Unhold</button>
+<form method="get" class="list-search">{% if customer %}<input type="hidden" name="customer" value="{{ customer.pk }}">{% endif %}<input type="search" name="q" value="{{ query }}" placeholder="Search number, customer or item" aria-label="Search {{ title }}" maxlength="100"><select name="period" aria-label="Date range"><option value="ytd" {% if period == 'ytd' %}selected{% endif %}>Year to Date</option><option value="today" {% if period == 'today' %}selected{% endif %}>Today</option><option value="7" {% if period == '7' %}selected{% endif %}>Last 7 Days</option><option value="30" {% if period == '30' %}selected{% endif %}>Last 30 Days</option><option value="90" {% if period == '90' %}selected{% endif %}>Last 90 Days</option><option value="all" {% if period == 'all' %}selected{% endif %}>All Dates</option></select><button class="button">Search</button><a href="?">Clear</a></form></div>
+{% if customer %}<div class="customer-info">{{ customer.display_name }} <a href="/customers/?customer={{ customer.pk }}#customer-details">Customer Details</a><a href="/pos/held/?period=all">Show All Customers</a></div>{% endif %}<div class="held-split"><div class="table-scroll" id="list-scroll" tabindex="0" role="region" aria-label="Scrollable {{ title }}"><table><thead><tr><th>Date</th><th>Receipt #</th><th>Status</th><th>Receipt Type</th><th class="number">Workstation</th><th>Cashier</th><th>Full Name</th><th class="number">No. of Items</th><th class="number">Total</th><th class="number">Total Qty Sold</th><th>Payment</th><th>Hold until</th><th></th></tr></thead><tbody>{% for doc in page %}<tr data-token="{{ doc.token }}" data-number="{{ doc.number_or_label }}"><td>{{ doc.created_at|date:'n/j/Y' }}</td><td><a href="/pos/sale/{{ doc.token }}/">{{ doc.number_or_label }}</a></td><td>Regular</td><td>{% if doc.receipt_type == None %}Sales{% else %}{{ doc.get_receipt_type_display }}{% endif %}</td><td class="number">{{ doc.workstation|default_if_none:'' }}</td><td>{{ doc.cashier }}</td><td>{{ doc.customer_name }}</td><td class="number">{{ doc.item_count }}</td><td class="number">${{ doc.total|floatformat:2 }}</td><td class="number">{{ doc.item_quantity|qty }}</td><td>{{ doc.payment_label }}</td><td{% if doc.holds_stock and doc.hold_expired %} class="hold-expired"{% endif %}>{{ doc.hold_label }}</td><td><a href="/pos/sale/{{ doc.token }}/">Unhold</a></td></tr>{% endfor %}</tbody></table>{% if not page.object_list %}<div class="empty"><strong>{% if query %}No matching held receipts{% else %}No held receipts{% if period != 'all' %} in this date range{% endif %}{% endif %}</strong>{% if period != 'all' %}Choose All Dates to see older held receipts. {% endif %}Choose Put on Hold on a sales receipt to return to it later. A hold for a real customer keeps the items out of Available stock until it is finished, deleted or its hold time runs out.</div>{% endif %}</div>
+<aside id="held-details" aria-label="Held receipt details" hidden><div class="hd-empty">Select a held receipt to see its details.</div></aside></div>
+<form method="post" id="held-delete-form" hidden>{% csrf_token %}<input type="hidden" name="next" value="{{ params }}"></form>
+<dialog id="confirm-dialog"><h2>Delete Held Receipt</h2><form method="dialog"><p id="confirm-message"></p><div class="actions"><button class="button" value="cancel">Go Back</button><button class="button primary" value="confirm">Delete</button></div></form></dialog>
+<div class="paging" id="list-pages"><span class="count">{{ page.paginator.count }} record{{ page.paginator.count|pluralize }}{% if page.object_list %} · {{ page.start_index }}–{{ page.end_index }} shown{% endif %}</span>{% if page.has_previous %}<a href="?{{ params }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}<span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{{ params }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% include "list-scroll.html" %}
+<script>
+(()=>{
+const KEY='freedomshop-held-details',scroll=document.getElementById('list-scroll'),panel=document.getElementById('held-details'),detailsButton=document.getElementById('held-details-button');
+let selected=null,shown=null;
+function rows(){return [...scroll.querySelectorAll('tbody tr')].filter(r=>r.dataset.token);}
+function mark(){rows().forEach(r=>r.classList.toggle('held-selected',r.dataset.token===selected?.token));document.querySelectorAll('[data-needs-selection]').forEach(b=>b.disabled=!selected);}
+async function refresh(){
+  if(panel.hidden)return;
+  if(!selected){panel.innerHTML='<div class="hd-empty">Select a held receipt to see its details.</div>';shown=null;return;}
+  if(shown===selected.token)return;shown=selected.token;
+  const token=selected.token;
+  try{const r=await fetch('/pos/held/'+token+'/details/'+location.search,{headers:{'X-Requested-With':'fetch'}});  // the list's filters ride along so Change Hold returns to the same view
+    const html=r.ok?await r.text():'';
+    if(token!==selected?.token)return;  // another row was picked while this loaded: its own request fills the panel
+    if(!r.ok){panel.innerHTML='<div class="hd-empty">This held receipt is no longer available. Reload the list.</div>';return;}
+    panel.innerHTML=html;
+    panel.querySelectorAll('script').forEach(old=>{const s=document.createElement('script');s.textContent=old.textContent;old.replaceWith(s);});
+    panel.querySelectorAll('[data-held-action]').forEach(wire);
+  }catch(e){if(token!==selected?.token)return;panel.innerHTML='<div class="hd-empty">Could not load the details. Check the connection and try again.</div>';shown=null;}
+}
+function showDetails(open){panel.hidden=!open;detailsButton.textContent=open?'Hide Details':'Show Details';detailsButton.setAttribute('aria-pressed',String(open));try{localStorage.setItem(KEY,open?'1':'0');}catch(e){}shown=null;refresh();}
+function select(row){selected=row?{token:row.dataset.token,number:row.dataset.number,name:row.dataset.name||''}:null;mark();refresh();}
+function confirmDelete(){
+  if(!selected)return;
+  const dialog=document.getElementById('confirm-dialog');
+  document.getElementById('confirm-message').textContent=`Delete this held receipt${selected.name?' for '+selected.name:''}? It was never completed, so nothing was sold; any items it was holding become available again. This cannot be undone.`;
+  dialog.returnValue='cancel';dialog.showModal();
+  dialog.addEventListener('close',()=>{if(dialog.returnValue==='confirm'){const f=document.getElementById('held-delete-form');f.action='/pos/held/'+selected.token+'/delete/';f.submit();}},{once:true});
+}
+function act(action){
+  if(action==='details')return showDetails(panel.hidden);
+  if(!selected)return;
+  if(action==='unhold')location.href='/pos/sale/'+selected.token+'/';
+  if(action==='reprint'){if(panel.hidden)showDetails(true);else{const go=panel.querySelector('.print-go');go?.scrollIntoView({block:'nearest'});go?.focus();}}
+  if(action==='delete')confirmDelete();
+}
+function wire(b){b.addEventListener('click',()=>{b.closest('details')?.removeAttribute('open');act(b.dataset.heldAction);});}
+document.querySelectorAll('.held-tools [data-held-action]').forEach(wire);
+document.addEventListener('list-scroll:row',e=>{const{row,record}=e.detail;row.dataset.token=record.token;row.dataset.number=(record.name||'').split(' · ')[0];row.dataset.name=(record.name||'').split(' · ').slice(1).join(' · ');});
+document.addEventListener('list-scroll:render',mark);
+new MutationObserver(mark).observe(scroll,{childList:true,subtree:true});
+scroll.addEventListener('click',e=>{const row=e.target.closest('tbody tr');if(!row||!row.dataset.token||e.target.closest('a'))return;select(row);});
+scroll.addEventListener('dblclick',e=>{const row=e.target.closest('tbody tr');if(row?.dataset.token)location.href='/pos/sale/'+row.dataset.token+'/';});
+document.addEventListener('keydown',e=>{if(e.key==='F8'){e.preventDefault();showDetails(panel.hidden);}});
+rows().forEach(r=>{const c=r.children[6];r.dataset.name=c?c.textContent.trim():'';});
+let open=false;try{open=localStorage.getItem(KEY)==='1';}catch(e){}
+const wanted=new URLSearchParams(location.search).get('held');if(wanted){const row=rows().find(r=>r.dataset.token===wanted);if(row){selected={token:row.dataset.token,number:row.dataset.number,name:row.dataset.name||''};if(!open)open=true;}}
+showDetails(open);mark();
+})();
+</script>{% endblock %}

@@ -1,0 +1,3 @@
+-r requirements.lock
+# Draft 2020-12 validation of the shipped exchange contract.
+jsonschema>=4.18,<5

@@ -1,0 +1,43 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<style>
+#item-pages[hidden],#item-scroll-status[hidden],#item-scroll-status [hidden]{display:none!important}
+#item-scroll{min-height:100px;overflow-anchor:none;background:white;flex:1}
+#item-scroll table.virtual{table-layout:fixed;width:1850px;min-width:100%;border-collapse:separate;border-spacing:0}
+#item-scroll .virtual th{height:38px;z-index:2}
+#item-scroll .virtual td{height:38px;padding:0 10px;line-height:37px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#item-scroll .virtual td a{display:block;overflow:hidden;text-overflow:ellipsis}
+#item-scroll .item-select{width:14px;height:14px;vertical-align:middle;margin:0 8px 0 0;padding:0}
+#item-scroll .virtual td:has(.item-select) a{display:inline-block;vertical-align:middle;width:calc(100% - 24px)}
+#item-scroll .virtual th:first-child{width:260px}#item-scroll .virtual th:nth-child(2){width:220px}
+#item-scroll .virtual .spacer td{padding:0;border:0;line-height:0;background:white}
+#item-scroll .virtual tr:not(.stripe) td{background:white}#item-scroll .virtual tr.stripe td{background:var(--brand-surface)}
+#item-scroll .virtual tr:not(.spacer):hover td{background:var(--brand-hover)}#item-scroll .virtual .loading{color:#626b75}
+#item-scroll td.on-order-link{color:var(--brand-green);text-decoration:underline;cursor:pointer;font-weight:bold}
+#item-scroll-status{flex-shrink:0;flex-wrap:nowrap;min-width:0}
+#item-range{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:bold;color:var(--brand-green)}
+#item-load-status{font-size:12px}#item-paged-link{white-space:nowrap}
+.pos-main:has(#item-scroll)>.tools,.pos-main:has(#item-scroll)>.status-strip,.pos-main:has(#item-scroll)>.page-title{flex-shrink:0}
+.item-print-note{display:none}.item-print-note[hidden]{display:none!important}
+@media(max-width:650px){.pos-workspace:has(#item-scroll){height:calc(100dvh - 130px);min-height:400px}#item-load-status{max-width:110px}}
+@media print{#item-scroll-status,#item-scroll .spacer{display:none!important}#item-scroll{overflow:visible}#item-scroll table.virtual{width:100%;min-width:0;table-layout:auto}#item-scroll .virtual td{height:auto;line-height:normal;white-space:normal}.item-print-note{display:block}}
+.item-split{display:flex;flex:1;min-height:0}.item-split>#item-scroll{flex:1;min-width:0}
+.item-details{width:58%;min-width:520px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;border-left:2px solid var(--brand-green);background:#efefef}.item-details[hidden]{display:none!important}
+.item-details-title{display:flex;align-items:center;justify-content:space-between;background:var(--brand-green);color:#fff;padding:6px 10px;font-size:14px;flex-shrink:0}.detail-close{background:none;border:0;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 4px}
+.item-details-content{overflow:auto;flex:1;min-height:0}.item-details-empty{padding:40px 16px;text-align:center;color:#677385;font-size:14px;line-height:1.6}
+.detail-head{display:flex;gap:14px;align-items:center;background:#fff;padding:12px 14px;border-bottom:1px solid #b9c5d3}.detail-photo{width:88px;height:72px;object-fit:contain;background:#f1f3f6;border:1px solid #c4cad1;flex-shrink:0}.detail-head .no-photo{display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:#657181}
+.detail-title{flex:1;min-width:0}.detail-title h2{margin:0 0 4px;font-size:22px;color:var(--brand-green);overflow-wrap:anywhere}.detail-title span{display:block;font-size:13px;color:#4f5a67}.detail-title .detail-inactive{color:#923328;font-weight:bold}
+.detail-body{padding:10px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start}.detail-col{min-width:0}
+.detail-body section{background:#fff;border:1px solid #c4c7cd;box-shadow:1px 2px 4px #0001;margin-bottom:10px}.detail-body h3{font-size:13px;font-weight:normal;color:var(--brand-green);background:linear-gradient(#fafafa,#e0e2e5);margin:0;padding:6px 9px}
+.detail-body dl{display:grid;grid-template-columns:minmax(90px,45%) minmax(0,1fr);gap:5px 10px;margin:0;padding:10px;font-size:13px}.detail-body dt{color:#4f5a67;text-align:right}.detail-body dd{margin:0;overflow-wrap:anywhere}
+.detail-note{font-size:12px;color:#5c6672;margin:0;padding:8px 10px}.detail-comments{white-space:pre-line;background:#fffde6;margin:0;padding:9px;font-size:13px;min-height:90px}.detail-history{font-size:12px}.detail-history th,.detail-history td{padding:6px 7px}
+.detail-qty{display:inline-block;min-width:44px}.detail-button{margin-left:8px;padding:2px 10px;font-size:12px;color:#fff;background:linear-gradient(#7d8790,#5b646d);border:1px solid #4d555c;border-radius:3px;cursor:pointer;vertical-align:middle}.detail-button:hover,.detail-button:focus-visible{background:linear-gradient(#5f6a74,#3f474f)}
+dialog.detail-popup{width:min(420px,92vw);padding:0}dialog.detail-orders{width:min(780px,94vw)}.detail-popup-head{display:flex;justify-content:space-between;align-items:center;background:var(--brand-green);color:#fff;padding:8px 12px;font-size:14px}.detail-popup-close{background:none;border:0;color:#fff;font-size:22px;line-height:1;cursor:pointer}
+.detail-popup-qty{display:grid;grid-template-columns:1fr auto;gap:7px 20px;margin:0;padding:14px 16px;font-size:14px}.detail-popup-qty dt{color:#4f5a67}.detail-popup-qty dd{margin:0;text-align:right}.detail-popup-total{font-weight:bold;color:var(--brand-green)!important;border-top:1px solid #aaa;padding-top:6px}
+.detail-popup-note{font-size:12px;color:#5c6672;margin:0;padding:8px 16px;line-height:1.5}.detail-popup-actions{display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;background:#fafafa;border-top:1px solid #ccc}
+.detail-orders-filter{padding:10px 12px;background:var(--brand-surface);border-bottom:1px solid #ccc;font-size:13px}.detail-orders-filter select{margin-left:6px}.detail-orders-scroll{max-height:50vh;overflow:auto}.detail-orders-scroll table{font-size:13px}.detail-orders-scroll tbody tr{cursor:pointer}.detail-orders-scroll tr[hidden]{display:none}.detail-orders-empty{padding:24px;text-align:center;color:#677385;margin:0}
+@media(max-width:1250px){.detail-body{grid-template-columns:1fr}.item-details{min-width:360px}}
+@media(max-width:900px){.item-split{flex-direction:column}.item-details{width:auto;min-width:0;height:55%;border-left:0;border-top:2px solid var(--brand-green)}}
+@media print{.item-details{display:none!important}}
+</style>
+<p id="item-print-note" class="item-print-note" hidden>Item List — this printout contains only the current scrolling window. Use pages for numbered printouts.</p>
+<div class="paging" id="item-scroll-status" hidden><span id="item-range" title="Top visible item name"></span><span id="item-load-status" role="status" aria-live="polite"></span><button class="button" id="item-retry" type="button" hidden>Retry</button><a id="item-paged-link" href="?{{ params }}&amp;view=pages">Use pages</a></div>

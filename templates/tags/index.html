@@ -1,0 +1,20 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block task_shortcuts %}<a class="shortcut" href="/tags/">Tag Generator</a><a class="shortcut" href="/tags/furniture-sets/new/">New Furniture Set Tag</a><a class="shortcut" href="/tags/item-tag/">New Item Tag</a><a class="shortcut" href="/purchasing/items/">Item List</a>{% endblock %}{% block content %}<style>
+.tag-types{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf}
+.tag-type{display:flex;gap:12px;align-items:center;padding:12px;background:white;border:1px solid var(--brand-border);border-radius:6px;text-decoration:none;color:inherit}
+.tag-type:hover{background:var(--brand-hover)}.tag-type svg{width:52px;height:52px;flex-shrink:0}
+.tag-type strong{display:block;color:var(--brand-green-dark);font-size:15px}.tag-type span{font-size:12px;color:#586372}
+.tag-type.soon{opacity:.55;pointer-events:none}
+.saved-message{padding:8px 12px;background:#e7f5d6;color:#365424;border-bottom:1px solid #c1d4ac;font-size:13px}
+.set-items{white-space:normal;color:#485365;font-size:12px;max-width:620px}.set-items .warn{color:#923328;font-weight:bold}
+</style>
+<div class="tag-types">
+<a class="tag-type" href="/tags/furniture-sets/new/"><svg aria-hidden="true"><use href="#tag-generator"/></svg><div><strong>Furniture Set Tag</strong><span>Pick the pieces of a set, then print a Letter sign with each item's price, the set total and "Reserve yours today".</span></div></a>
+<a class="tag-type" href="/tags/item-tag/"><svg aria-hidden="true"><use href="#tag-generator"/></svg><div><strong>Item Tag</strong><span>Pick one item, check or change the text on the preview, then print a 3 × 4 in price tag on the Zebra tag printer.</span></div></a>
+</div>
+{% if deleted %}<div class="saved-message" role="status">Deleted set tag "{{ deleted }}".</div>{% endif %}
+<div class="tools"><strong>Saved Furniture Set Tags</strong><form method="get" class="list-search"><input type="search" name="q" value="{{ query }}" placeholder="Search set name" aria-label="Search saved set tags" maxlength="100"><button class="button">Search</button><a href="?">Clear</a></form><a class="want" href="/tags/furniture-sets/new/">New Furniture Set Tag</a></div>
+<div class="table-scroll"><table><thead><tr><th>Set Name</th><th>Items</th><th class="number">Pieces</th><th class="number">Set Total</th><th>Updated</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr><td><a href="/tags/furniture-sets/{{ row.tag_set.token }}/">{{ row.tag_set.name }}</a></td><td class="set-items">{% for r in row.data.rows %}{{ r.quantity|qty }} × {{ r.item_name }}{% if r.inactive %} <span class="warn">(in Items Trash)</span>{% elif r.missing %} <span class="warn">(no longer in Item List)</span>{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}</td><td class="number">{{ row.data.pieces|qty }}</td><td class="number">${{ row.data.total|floatformat:2 }}</td><td>{{ row.tag_set.updated_at|date:'n/j/Y' }}</td><td><a href="/tags/furniture-sets/{{ row.tag_set.token }}/">Edit / Print</a> <a href="/tags/furniture-sets/{{ row.tag_set.token }}/pdf/" target="_blank" rel="noopener">PDF</a></td></tr>
+{% endfor %}</tbody></table>{% if not rows %}<div class="empty"><strong>{% if query %}No set tags match "{{ query }}"{% else %}No furniture set tags yet{% endif %}</strong>Choose New Furniture Set Tag, or select the pieces in Item List and choose Make Furniture Set Tag.</div>{% endif %}</div>
+{% endblock %}

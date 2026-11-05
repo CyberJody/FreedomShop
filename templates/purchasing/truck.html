@@ -1,0 +1,183 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "purchasing/base.html" %}{% block content %}
+<div class="tools truck-tools"><a class="button" href="/purchasing/truck/">Truck List</a>
+<span class="truck-totals" id="truck-totals"><b id="t-pieces">{{ totals.pieces }}</b> piece{{ totals.pieces|pluralize }} scanned · <b id="t-pos">{{ totals.pos }}</b> PO{{ totals.pos|pluralize }} · <b id="t-vendors">{{ totals.vendors }}</b> vendor{{ totals.vendors|pluralize }}</span>
+<span class="truck-status" id="truck-status">{% if session %}{{ session.number }} · {{ session.get_status_display }}{% else %}New truck: the first scan starts it{% endif %}</span>
+{% if not session or session.status == 'open' %}<form method="post" id="receive-form" action="{% if session %}/purchasing/truck/{{ session.token }}/receive/{% endif %}" class="truck-receive">{% csrf_token %}<input type="hidden" name="version" id="truck-version" value="{{ session.version|default:0 }}"><button type="submit" class="button primary" id="receive-button" {% if not totals.pieces %}disabled{% endif %}>Receive Items</button></form>{% if session %}<form method="post" action="/purchasing/truck/{{ session.token }}/cancel/" id="cancel-form">{% csrf_token %}<button type="submit" class="button">Cancel Truck</button></form>{% endif %}{% endif %}</div>
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+{% if request.GET.received and session.status == 'received' %}<div class="success" role="status">Received. One receiving voucher per PO:{% for v in vouchers %} <a href="/purchasing/voucher/{{ v.token }}/">{{ v.number }}</a> ({{ v.vendor_name }}){% if not forloop.last %},{% endif %}{% endfor %}. Pieces not scanned stay due on their POs.</div>{% elif session.status == 'received' %}<div class="notice">Received {{ session.received_at|date:'n/j/Y g:i A' }}. Vouchers:{% for v in vouchers %} <a href="/purchasing/voucher/{{ v.token }}/">{{ v.number }}</a> ({{ v.vendor_name }}){% if not forloop.last %},{% endif %}{% endfor %}.</div>{% elif session.status == 'cancelled' %}<div class="notice">This truck was cancelled; nothing on it was received.</div>{% endif %}
+{% if not session or session.status == 'open' %}<div class="scan-area"><label for="scan-box">Scan a piece</label><input id="scan-box" class="scan-box" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus placeholder="Scan the label (or type its code and press Enter)" aria-describedby="last-result"><span id="scan-queue" class="scan-queue" aria-live="polite"></span></div>
+<div id="last-result" class="last-result idle" role="status" aria-live="assertive"><div class="lr-message">Ready to scan.</div><div class="lr-item"></div><div class="lr-desc"></div><div class="lr-po"></div><div class="lr-piece"></div><div class="lr-onhand"></div></div>{% endif %}
+<div class="table-scroll truck-scroll"><table class="truck-table"><thead><tr><th>Item</th><th class="num" title="Quantity on hand now, before this truck is received">On Hand</th><th class="num">Ordered</th><th class="num">Already received</th><th class="num">On this truck</th><th>Pieces</th><th></th></tr></thead><tbody id="truck-body-anchor" hidden></tbody>
+<tbody id="truck-body-wrap"></tbody>{% include "purchasing/truck-table.html" %}</table></div>
+<style>
+.truck-tools{gap:14px}.truck-totals{font-size:16px}.truck-status{color:#4c5868}.truck-receive{margin-left:auto}
+.scan-area{display:flex;align-items:center;gap:12px;padding:12px;background:#f2f2f2}.scan-area label{font-size:18px;font-weight:bold}
+.scan-box{flex:1;font-size:26px!important;padding:10px 12px;border:3px solid var(--brand-green);border-radius:6px;font-family:monospace}
+.scan-queue{min-width:120px;color:#4c5868}
+.last-result{margin:10px 12px;padding:14px 18px;border:3px solid #c8ccd2;border-radius:8px;background:#fafafa;min-height:120px;transition:background .15s}
+.last-result .lr-message{font-size:24px;font-weight:bold}.last-result .lr-item{font-size:30px;font-weight:bold;margin-top:4px}
+.last-result .lr-desc{font-size:16px;color:#3a4350}.last-result .lr-po,.last-result .lr-piece{font-size:20px;margin-top:4px}
+.last-result.ok{border-color:#3d8b2f;background:#e4f5dc}.last-result.repeat{border-color:#c48a12;background:#fff3d1}.last-result.error{border-color:#b33a2c;background:#ffe3df}
+.last-result.flash{filter:brightness(.92)}
+.truck-table{width:100%}.truck-table td.on-hand.low,.lr-onhand.low{color:#b30000;font-weight:bold}.lr-onhand{font-size:15px}.truck-table .vendor-row th{background:var(--brand-green);color:#fff;text-align:left;font-size:15px}
+.truck-table .po-row th{background:#e6ecef;text-align:left}.po-pieces{font-weight:normal;color:#4c5868;margin-left:8px}
+.truck-table td.num,.truck-table th.num{text-align:right}.truck-table .scanned{font-weight:bold;font-size:16px}
+.truck-table .desc{font-size:12px;color:#56657a;white-space:normal}.truck-table .codes{white-space:normal}
+.piece{display:inline-block;margin:2px 8px 2px 0;font-size:12px}.piece code{font-size:11px;color:#56657a}
+.remove-piece{font-size:11px;padding:1px 5px;cursor:pointer}.remove-line{font-size:12px}.empty-truck{padding:20px;color:#4c5868}
+.truck-removed td{color:#7a4a40;font-size:12px}
+</style>
+{% endblock %}
+{% block scripts %}{% if not session or session.status == 'open' %}<script>
+(() => {
+  const box = document.getElementById('scan-box');
+  const panel = document.getElementById('last-result');
+  const queueNote = document.getElementById('scan-queue');
+  const versionInput = document.getElementById('truck-version');
+  const receiveForm = document.getElementById('receive-form');
+  const receiveButton = document.getElementById('receive-button');
+  const csrf = (receiveForm.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+  let base = {% if session %}'/purchasing/truck/{{ session.token }}/'{% else %}null{% endif %};
+  let version = {{ session.version|default:0 }};
+  let totals = {pieces: {{ totals.pieces }}, pos: {{ totals.pos }}, vendors: {{ totals.vendors }}};
+  const queue = [];
+  let busy = false;
+
+  // Sounds: Web Audio beeps, no files. ok = one short high beep; repeat = two low beeps; error = long low buzz.
+  let audio = null;
+  function ctx() { if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; } } if (audio && audio.state === 'suspended') audio.resume(); return audio; }
+  function tone(freq, start, length, type) {
+    const a = ctx(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq; g.gain.value = 0.25;
+    o.connect(g); g.connect(a.destination);
+    const t = a.currentTime + start; o.start(t); g.gain.setValueAtTime(0.25, t); g.gain.linearRampToValueAtTime(0, t + length); o.stop(t + length + 0.02);
+  }
+  const sounds = {
+    ok: () => tone(1760, 0, 0.12),
+    repeat: () => { tone(440, 0, 0.12, 'square'); tone(440, 0.2, 0.12, 'square'); },
+    error: () => tone(160, 0, 0.7, 'sawtooth'),
+  };
+  window.truckSounds = sounds;
+
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+  function setTotals(t) {
+    if (!t) return; totals = t;
+    document.getElementById('truck-totals').innerHTML = '<b id="t-pieces">' + t.pieces + '</b> ' + (t.pieces === 1 ? 'piece' : 'pieces') + ' scanned · <b id="t-pos">' + t.pos + '</b> ' + (t.pos === 1 ? 'PO' : 'POs') + ' · <b id="t-vendors">' + t.vendors + '</b> ' + (t.vendors === 1 ? 'vendor' : 'vendors');
+    receiveButton.disabled = !t.pieces;
+  }
+  function setTable(html) {
+    const table = document.querySelector('.truck-table');
+    table.querySelectorAll('tbody:not(#truck-body-anchor):not(#truck-body-wrap)').forEach(b => b.remove());
+    document.getElementById('truck-body-wrap').insertAdjacentHTML('afterend', html);
+  }
+  function applyState(data) {
+    if (data.version !== undefined && !data.unchanged) { version = data.version; versionInput.value = version; }
+    if (data.totals) setTotals(data.totals);
+    if (data.html !== undefined) setTable(data.html);
+    if (data.status && data.status !== 'open') location.reload();
+  }
+  function show(result) {
+    const kind = result.kind || 'error';
+    panel.className = 'last-result ' + kind + ' flash';
+    setTimeout(() => panel.classList.remove('flash'), 180);
+    panel.querySelector('.lr-message').textContent = (kind === 'ok' ? '✔ ' : kind === 'repeat' ? '↺ ' : '✖ ') + (result.message || '') + (result.detail ? ': ' + result.detail : (result.code && !result.item ? ': ' + result.code : ''));
+    panel.querySelector('.lr-item').textContent = result.item || '';
+    const oh = panel.querySelector('.lr-onhand');  // on hand before this truck; 0 or less stands out
+    oh.textContent = result.on_hand_text !== undefined && result.on_hand_text !== '' ? 'On hand now: ' + result.on_hand_text + (result.on_hand_low ? ' — restock the floor display' : '') : '';
+    oh.classList.toggle('low', !!result.on_hand_low);
+    panel.querySelector('.lr-desc').textContent = result.description || '';
+    panel.querySelector('.lr-po').textContent = result.po ? result.po + ' · ' + (result.vendor || '') : '';
+    panel.querySelector('.lr-piece').textContent = result.piece ? 'Piece ' + result.piece + ' of ' + result.pieces + (result.on_truck ? ' · this truck: ' + result.on_truck + ' of ' + result.pieces + ' on this line' : '') : '';
+    (sounds[kind] || sounds.error)();
+  }
+  function noteQueue() { queueNote.textContent = queue.length ? plural(queue.length, 'scan') + ' waiting…' : ''; }
+
+  async function post(url, body) {
+    const response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrf}, body: JSON.stringify(body), credentials: 'same-origin'});
+    let data = {};
+    try { data = await response.json(); } catch (e) { data = {error: 'The server sent an unexpected reply (' + response.status + ').'}; }
+    if (!response.ok && !data.kind) throw new Error(data.error || ('Server error ' + response.status));
+    return data;
+  }
+  // Scans are sent one at a time, in the order they were scanned, so a burst never loses or reorders a piece.
+  async function pump() {
+    if (busy) return; busy = true;
+    while (queue.length) {
+      const code = queue.shift(); noteQueue();
+      try {
+        const data = await post((base || '/purchasing/truck/new/') + 'scan/', {code});
+        if (data.url && !base) {
+          base = data.url; history.replaceState(null, '', data.url);
+          receiveForm.action = data.url + 'receive/';
+          document.getElementById('truck-status').textContent = data.number + ' · Unloading';
+        }
+        applyState(data); show(data);
+      } catch (e) {
+        show({kind: 'error', message: 'Not recorded: ' + code + '. ' + (e.message || 'No connection') + ' Scan it again.'});
+      }
+    }
+    busy = false; noteQueue();
+  }
+  function submit() {
+    const code = box.value.trim(); box.value = '';   // cleared at once: the next scan can start typing right away
+    if (!code) return;
+    ctx(); queue.push(code); noteQueue(); pump();
+  }
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || (e.key === 'Tab' && box.value.trim())) { e.preventDefault(); submit(); }
+    else if (e.key === 'Escape') box.value = '';
+  });
+
+  // The scan box owns the focus: after a click elsewhere, or when focus drops to nothing, it comes back.
+  const dialogOpen = () => !!document.querySelector('dialog[open]');
+  const typing = el => el && (el.matches('input,textarea,select,[contenteditable]'));
+  function refocus() { setTimeout(() => { if (!dialogOpen() && !typing(document.activeElement) && !(document.activeElement && document.activeElement.matches('button:focus-visible,a:focus-visible'))) box.focus(); }, 100); }
+  document.addEventListener('click', refocus);
+  box.addEventListener('blur', e => { if (!e.relatedTarget) refocus(); });
+  // A scan that starts while a button or link has the keyboard focus still goes into the scan box.
+  document.addEventListener('keydown', e => {
+    if (e.target === box || dialogOpen() || typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key.length === 1) { e.preventDefault(); box.focus(); box.value += e.key; }
+  });
+
+  // Two laptops on one truck: each page asks every 2 seconds whether the truck changed and redraws the table.
+  async function poll() {
+    if (!base || busy || document.hidden) return;
+    try {
+      const response = await fetch(base + 'state/?v=' + version, {headers: {'Accept': 'application/json'}, credentials: 'same-origin'});
+      if (response.ok) applyState(await response.json());
+    } catch (e) { /* next poll tries again */ }
+  }
+  setInterval(poll, 2000);
+
+  async function removeScans(body, label) {
+    const reason = window.prompt('Remove ' + label + ' from this truck. Reason (for example: damaged, going back):', 'damaged, going back');
+    box.focus();
+    if (reason === null) return;
+    try {
+      const response = await fetch(base + 'remove/', {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrf}, body: JSON.stringify(Object.assign({reason}, body)), credentials: 'same-origin'});
+      const data = await response.json();
+      if (!response.ok) { show({kind: 'error', message: data.error || 'Not removed.'}); return; }
+      applyState(data);
+    } catch (e) { show({kind: 'error', message: 'Not removed: no connection.'}); }
+  }
+  document.addEventListener('click', e => {
+    const piece = e.target.closest('.remove-piece');
+    if (piece) { e.preventDefault(); removeScans({scan: piece.dataset.scan}, piece.dataset.name); return; }
+    const line = e.target.closest('.remove-line');
+    if (line) { e.preventDefault(); removeScans({line: line.dataset.line}, 'all ' + line.dataset.count + ' of ' + line.dataset.name); }
+  });
+
+  receiveForm.addEventListener('submit', e => {
+    if (!base || !totals.pieces) { e.preventDefault(); return; }
+    if (!window.confirm('Receive ' + plural(totals.pieces, 'piece') + ' on ' + plural(totals.pos, 'PO') + '?\n\nOne receiving voucher is made for each PO. Pieces not scanned stay due on their POs.')) { e.preventDefault(); box.focus(); }
+  });
+  const cancelForm = document.getElementById('cancel-form');
+  if (cancelForm) cancelForm.addEventListener('submit', e => {
+    if (!window.confirm('Cancel this truck? Nothing on it is received, and its pieces can be scanned on another truck.')) { e.preventDefault(); box.focus(); }
+  });
+  box.focus();
+})();
+</script>{% endif %}{% endblock %}

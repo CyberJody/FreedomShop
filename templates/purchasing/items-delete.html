@@ -1,0 +1,40 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "purchasing/base.html" %}{% block content %}<style>
+.delete-window{padding:14px 18px;overflow:auto;flex:1;line-height:1.5}
+.delete-window h2{font-size:15px;color:var(--brand-green-dark);margin:16px 0 6px}
+.delete-window table{width:100%;border-collapse:collapse;background:white}
+.delete-window th,.delete-window td{padding:6px 8px;border-bottom:1px solid #e1e6ec;vertical-align:top;font-size:13px;text-align:left;white-space:normal}
+.delete-window td.desc{max-width:420px}.delete-window td.warn-cell{min-width:360px}
+.delete-window th{background:var(--brand-surface)}
+.delete-window .number{text-align:right;white-space:nowrap}
+.delete-window ul.warnings{margin:0;padding-left:18px;color:#8a4b12}
+.delete-window ul.warnings li{margin:0}
+.delete-window .lead{margin:0 0 8px;color:#485365}
+.delete-window .actions{display:flex;gap:10px;padding:14px 0 0}
+.delete-window .warn-count{color:#8a4b12;font-weight:bold}
+</style>
+<div class="delete-window">
+<form method="post">{% csrf_token %}
+{% if not items %}<div class="empty"><strong>Nothing to delete</strong>{% if all_unused %}Every item has sales, order, purchasing or tag history, or is already in the Items Trash.{% else %}Select active items in the Item List first.{% endif %}</div><div class="actions"><a class="button" href="{{ back }}">Go Back</a></div>
+{% else %}
+<p class="lead">Move {{ items|length }} item{{ items|length|pluralize }} to the <strong>Items Trash</strong>. Trashed items disappear from the Item List, item searches and quick picks, purchasing and tags, but stay on every saved receipt, order, purchase order, report and history list. You can bring them back from the Items Trash at any time.</p>
+{% for item in items %}<input type="hidden" name="item" value="{{ item.pk }}">{% endfor %}
+{% if warned %}<h2>With warnings <span class="warn-count">({{ warned|length }})</span></h2>
+<p class="lead">These items can still be deleted; this is what happens to what points at them.</p>
+<table><thead><tr><th>Item Name</th><th>Item No.</th><th>Item Description</th><th class="number">On Hand</th><th>Warnings</th></tr></thead><tbody>
+{% for row in warned %}<tr><td>{{ row.item.display_name }}</td><td>{{ row.item.sku }}</td><td class="desc">{{ row.item.description }}</td><td class="number">{{ row.on_hand|default_if_none:'Unverified'|qty }}</td><td class="warn-cell"><ul class="warnings">
+{% if row.on_hand and row.on_hand != 0 %}<li>Quantity on hand {{ row.on_hand|qty }} will be set to 0 (inventory adjustment "Moved to Trash"; put back on Restore).</li>{% endif %}
+{% if row.orders %}<li>On {{ row.orders|length }} open sales order{{ row.orders|length|pluralize }}: {% for d in row.orders|slice:":6" %}<a href="/pos/order/{{ d.token }}/">{{ d.numbered_label }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% if row.orders|length > 6 %} …{% endif %}. The order keeps the line; it can still be saved and picked up.</li>{% endif %}
+{% if row.held %}<li>On {{ row.held|length }} held receipt{{ row.held|length|pluralize }}: {% for d in row.held|slice:":6" %}<a href="/pos/sale/{{ d.token }}/">{{ d.number_or_label }}{% if d.customer_name %} · {{ d.customer_name }}{% endif %}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% if row.held|length > 6 %} …{% endif %}. The receipt keeps the line.</li>{% endif %}
+{% if row.pos %}<li>Due on {{ row.pos|length }} open purchase order{{ row.pos|length|pluralize }}: {% for d, due in row.pos|slice:":6" %}<a href="/purchasing/po/{{ d.token }}/">{{ d.number_or_label }}</a> ({{ due|qty }} due){% if not forloop.last %}, {% endif %}{% endfor %}{% if row.pos|length > 6 %} …{% endif %}. It can still be received.</li>{% endif %}
+{% if row.sets %}<li>In {{ row.sets|length }} furniture set tag{{ row.sets|length|pluralize }}: {% for s in row.sets|slice:":6" %}<a href="/tags/furniture-sets/{{ s.token }}/">{{ s.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% if row.sets|length > 6 %} …{% endif %}. The set shows a warning and still prints.</li>{% endif %}
+</ul></td></tr>{% endfor %}</tbody></table>{% endif %}
+{% if clean %}<h2>Nothing attached ({{ clean|length }})</h2>
+<table><thead><tr><th>Item Name</th><th>Item No.</th><th>Item Description</th><th class="number">On Hand</th><th>History</th></tr></thead><tbody>
+{% for row in clean %}<tr><td>{{ row.item.display_name }}</td><td>{{ row.item.sku }}</td><td class="desc">{{ row.item.description }}</td><td class="number">{{ row.on_hand|default_if_none:'Unverified'|qty }}</td><td>{% if row.sold %}Has sales history (kept){% else %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+<div class="actions"><button class="button primary" name="confirm" value="1">Move {{ items|length }} Item{{ items|length|pluralize }} to Trash</button><a class="button" href="{{ back }}">Go Back</a></div>
+{% endif %}
+</form>
+</div>
+{% endblock %}

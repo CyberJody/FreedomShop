@@ -1,0 +1,2 @@
+Description 1	Description 2	Department	Attr	Size	Price 1	Avg. Cost	On Hand	Tax Code
+Café Table	Demo café table	Dining	Natural	Small	75.00	30.25	2	Tax

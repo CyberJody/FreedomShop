@@ -1,0 +1,14 @@
+{% extends "settings/base.html" %}{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% block content %}<div class="settings-wrap">
+<section class="settings-panel"><h2>Dry run — review before importing</h2><p>No business rows have been saved. Counts below reflect the saved mapping choices. Import validates them again against current data.</p>
+{% for file in log.files %}<p>{{ file.kind }}: {{ file.name }} — {{ file.row_count }} rows ({{ file.encoding }}).{% if file.unknown_columns %} Unknown columns: {{ file.unknown_columns|join:', ' }}.{% endif %}</p>{% endfor %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% include 'settings/qbpos-summary.html' %}</section>
+<section class="settings-panel"><h2>Department and tax proposals</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="review">
+{% for row in tax_codes %}<p><label for="tax_{{ forloop.counter0 }}">Tax code {{ row.code|default:'(blank)' }}</label> <select id="tax_{{ forloop.counter0 }}" name="tax_{{ forloop.counter0 }}"><option value="">Choose category</option>{% for category in categories %}<option value="{{ category.pk }}" {% if category.pk|stringformat:'s' == row.selected %}selected{% endif %}>{{ category.name }}{% if not category.taxable %} (non-taxable){% endif %}</option>{% endfor %}</select></p>{% endfor %}
+{% for row in departments %}<p><label for="department_{{ forloop.counter0 }}">Department {{ row.name }} (first tax code: {{ row.tax_code|default:'blank' }})</label> <select id="department_{{ forloop.counter0 }}" name="department_{{ forloop.counter0 }}"><option value="">Create {{ row.name }}</option>{% for department in department_choices %}<option value="{{ department.pk }}" {% if department.pk|stringformat:'s' == row.selected %}selected{% endif %}>{{ department.name }}</option>{% endfor %}</select></p>{% endfor %}
+<p><label><input type="checkbox" name="opening_voucher" {% if log.options.opening_voucher %}checked{% endif %}> Create opening receiving vouchers dated today, one per department</label></p>
+<button class="button">Review mappings and recalculate</button></form></section>
+<section class="settings-panel"><p>Import uses the saved choices above. After changing a choice, use Review mappings and recalculate first.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="import"><button class="button primary" {% if error %}disabled{% endif %}>Import</button> <a class="button" href="{% url 'qbpos-upload' %}">Start another upload</a> <a href="{% url 'qbpos-imports' %}">Past imports</a></form></section>
+</div>{% endblock %}

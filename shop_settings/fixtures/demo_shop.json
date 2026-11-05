@@ -1,0 +1,454 @@
+[
+ {
+  "model": "shop_settings.business",
+  "pk": 1,
+  "fields": {
+   "name": "Demo Home & Hardware",
+   "legal_name": "Demo Home & Hardware",
+   "address_line1": "123 Main St",
+   "city": "Springfield",
+   "region": "IL",
+   "postal_code": "62701",
+   "country": "United States",
+   "phone": "555-0100",
+   "email": "hello@example.com",
+   "website": "https://example.com",
+   "return_policy": "Returns within 30 days with this receipt. Mixed paint and cut keys are final sale.",
+   "receipt_footer": "Thank you for your order!",
+   "time_zone": "America/Chicago",
+   "currency": "USD",
+   "updated_at": "2026-01-01T12:00:00Z"
+  }
+ },
+ {
+  "model": "purchasing.department",
+  "pk": 1,
+  "fields": {
+   "code": "TL",
+   "name": "Tools",
+   "tax_category": [
+    "Taxable"
+   ]
+  }
+ },
+ {
+  "model": "purchasing.department",
+  "pk": 2,
+  "fields": {
+   "code": "PH",
+   "name": "Paint and Hardware",
+   "tax_category": [
+    "Taxable"
+   ]
+  }
+ },
+ {
+  "model": "purchasing.department",
+  "pk": 3,
+  "fields": {
+   "code": "SV",
+   "name": "Services",
+   "tax_category": [
+    "Non-taxable"
+   ]
+  }
+ },
+ {
+  "model": "purchasing.vendor",
+  "pk": 1,
+  "fields": {
+   "code": "SPT",
+   "company": "Springfield Tool & Supply",
+   "contact": "Pat Example",
+   "phone": "555-0141",
+   "email": "orders@example.com",
+   "street": "45 Mill Rd",
+   "city": "Springfield",
+   "state": "IL",
+   "postal_code": "62702",
+   "terms": "Net 30"
+  }
+ },
+ {
+  "model": "purchasing.vendor",
+  "pk": 2,
+  "fields": {
+   "code": "MVH",
+   "company": "Maple Valley Hardware",
+   "contact": "Sam Sample",
+   "phone": "555-0152",
+   "email": "sales@example.net",
+   "street": "900 Valley Pkwy",
+   "city": "Shelbyville",
+   "state": "IL",
+   "postal_code": "62565",
+   "terms": "Net 15"
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 1,
+  "fields": {
+   "sku": "DEMO-1001",
+   "name": "Cordless Drill Kit",
+   "description": "Cordless Drill Kit",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "20 V",
+   "price": "149.00",
+   "order_cost": "82.00",
+   "average_cost": "82.00",
+   "on_hand": "4.000",
+   "department": 1,
+   "primary_vendor": 1,
+   "vendor": "Springfield Tool & Supply",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 2,
+  "fields": {
+   "sku": "DEMO-1002",
+   "name": "Circular Saw",
+   "description": "Circular Saw",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "7-1/4 in",
+   "price": "119.00",
+   "order_cost": "64.00",
+   "average_cost": "64.00",
+   "on_hand": "3.000",
+   "department": 1,
+   "primary_vendor": 1,
+   "vendor": "Springfield Tool & Supply",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 3,
+  "fields": {
+   "sku": "DEMO-1003",
+   "name": "Claw Hammer",
+   "description": "Claw Hammer",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "16 oz",
+   "price": "24.99",
+   "order_cost": "11.50",
+   "average_cost": "11.50",
+   "on_hand": "12.000",
+   "department": 1,
+   "primary_vendor": 2,
+   "vendor": "Maple Valley Hardware",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 4,
+  "fields": {
+   "sku": "DEMO-1004",
+   "name": "Socket Set, 40 Piece",
+   "description": "Socket Set, 40 Piece",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "1/4 and 3/8 in",
+   "price": "59.00",
+   "order_cost": "29.00",
+   "average_cost": "29.00",
+   "on_hand": "6.000",
+   "department": 1,
+   "primary_vendor": 2,
+   "vendor": "Maple Valley Hardware",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 5,
+  "fields": {
+   "sku": "DEMO-1005",
+   "name": "Step Ladder",
+   "description": "Step Ladder",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "6 ft",
+   "price": "89.00",
+   "order_cost": "46.00",
+   "average_cost": "46.00",
+   "on_hand": "2.000",
+   "department": 1,
+   "primary_vendor": 1,
+   "vendor": "Springfield Tool & Supply",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 6,
+  "fields": {
+   "sku": "DEMO-2001",
+   "name": "Interior Paint, Eggshell",
+   "description": "Interior Paint, Eggshell",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "1 gal",
+   "price": "38.99",
+   "order_cost": "18.50",
+   "average_cost": "18.50",
+   "on_hand": "24.000",
+   "department": 2,
+   "primary_vendor": 1,
+   "vendor": "Springfield Tool & Supply",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 7,
+  "fields": {
+   "sku": "DEMO-2002",
+   "name": "Deck Stain",
+   "description": "Deck Stain",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "1 gal",
+   "price": "34.99",
+   "order_cost": "16.75",
+   "average_cost": "16.75",
+   "on_hand": "10.000",
+   "department": 2,
+   "primary_vendor": 2,
+   "vendor": "Maple Valley Hardware",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 8,
+  "fields": {
+   "sku": "DEMO-2003",
+   "name": "Wood Screws, Box of 100",
+   "description": "Wood Screws, Box of 100",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "#8 x 1-1/2 in",
+   "price": "9.49",
+   "order_cost": "3.80",
+   "average_cost": "3.80",
+   "on_hand": "40.000",
+   "department": 2,
+   "primary_vendor": 2,
+   "vendor": "Maple Valley Hardware",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 9,
+  "fields": {
+   "sku": "DEMO-2004",
+   "name": "Kitchen Faucet",
+   "description": "Kitchen Faucet",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "Single handle",
+   "price": "129.00",
+   "order_cost": "61.00",
+   "average_cost": "61.00",
+   "on_hand": "3.000",
+   "department": 2,
+   "primary_vendor": 1,
+   "vendor": "Springfield Tool & Supply",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 10,
+  "fields": {
+   "sku": "DEMO-3001",
+   "name": "Local Delivery",
+   "description": "Local Delivery",
+   "item_type": "noninventory",
+   "wood": "",
+   "size": "",
+   "price": "49.00",
+   "order_cost": "0.00",
+   "average_cost": "0.00",
+   "on_hand": null,
+   "department": 3,
+   "primary_vendor": null,
+   "vendor": "",
+   "print_tags": false
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 11,
+  "fields": {
+   "sku": "DEMO-3002",
+   "name": "Key Cutting",
+   "description": "Key Cutting",
+   "item_type": "noninventory",
+   "wood": "",
+   "size": "",
+   "price": "3.50",
+   "order_cost": "0.00",
+   "average_cost": "0.00",
+   "on_hand": null,
+   "department": 3,
+   "primary_vendor": null,
+   "vendor": "",
+   "print_tags": false
+  }
+ },
+ {
+  "model": "sales.item",
+  "pk": 12,
+  "fields": {
+   "sku": "DEMO-3003",
+   "name": "LED Shop Light",
+   "description": "LED Shop Light",
+   "item_type": "inventory",
+   "wood": "",
+   "size": "4 ft",
+   "price": "39.99",
+   "order_cost": "17.00",
+   "average_cost": "17.00",
+   "on_hand": "8.000",
+   "department": 2,
+   "primary_vendor": 2,
+   "vendor": "Maple Valley Hardware",
+   "print_tags": true
+  }
+ },
+ {
+  "model": "customers.customer",
+  "pk": 1,
+  "fields": {
+   "source_id": "demo:1001",
+   "customer_number": "1001",
+   "full_name": "Alex Rivera",
+   "first_name": "Alex",
+   "last_name": "Rivera",
+   "company": "",
+   "track_as_company": false,
+   "phone": "555-0110",
+   "email": "alex.rivera@example.com",
+   "street": "12 Elm St",
+   "city": "Springfield",
+   "state": "IL",
+   "postal_code": "62701",
+   "source_data": {},
+   "imported_at": "2026-01-01T12:00:00Z"
+  }
+ },
+ {
+  "model": "customers.customer",
+  "pk": 2,
+  "fields": {
+   "source_id": "demo:1002",
+   "customer_number": "1002",
+   "full_name": "Jordan Lee",
+   "first_name": "Jordan",
+   "last_name": "Lee",
+   "company": "",
+   "track_as_company": false,
+   "phone": "555-0111",
+   "email": "jordan.lee@example.com",
+   "street": "78 Oak Ave",
+   "city": "Springfield",
+   "state": "IL",
+   "postal_code": "62703",
+   "source_data": {},
+   "imported_at": "2026-01-01T12:00:00Z"
+  }
+ },
+ {
+  "model": "customers.customer",
+  "pk": 3,
+  "fields": {
+   "source_id": "demo:1003",
+   "customer_number": "1003",
+   "full_name": "Casey Morgan",
+   "first_name": "Casey",
+   "last_name": "Morgan",
+   "company": "",
+   "track_as_company": false,
+   "phone": "555-0112",
+   "email": "casey.morgan@example.org",
+   "street": "301 Pine Rd",
+   "city": "Shelbyville",
+   "state": "IL",
+   "postal_code": "62565",
+   "source_data": {},
+   "imported_at": "2026-01-01T12:00:00Z"
+  }
+ },
+ {
+  "model": "customers.customer",
+  "pk": 4,
+  "fields": {
+   "source_id": "demo:1004",
+   "customer_number": "1004",
+   "full_name": "Taylor Brooks",
+   "first_name": "Taylor",
+   "last_name": "Brooks",
+   "company": "",
+   "track_as_company": false,
+   "phone": "555-0113",
+   "email": "",
+   "street": "9 Birch Ln",
+   "city": "Springfield",
+   "state": "IL",
+   "postal_code": "62704",
+   "source_data": {},
+   "imported_at": "2026-01-01T12:00:00Z"
+  }
+ },
+ {
+  "model": "customers.customer",
+  "pk": 5,
+  "fields": {
+   "source_id": "demo:1005",
+   "customer_number": "1005",
+   "full_name": "Riley Chen",
+   "first_name": "Riley",
+   "last_name": "Chen",
+   "company": "",
+   "track_as_company": false,
+   "phone": "555-0114",
+   "email": "riley.chen@example.net",
+   "street": "450 Cedar Ct",
+   "city": "Capital City",
+   "state": "IL",
+   "postal_code": "62706",
+   "source_data": {},
+   "imported_at": "2026-01-01T12:00:00Z"
+  }
+ },
+ {
+  "model": "customers.customer",
+  "pk": 6,
+  "fields": {
+   "source_id": "demo:1006",
+   "customer_number": "1006",
+   "full_name": "Example Bed and Breakfast",
+   "first_name": "",
+   "last_name": "",
+   "company": "Example Bed and Breakfast",
+   "track_as_company": true,
+   "phone": "555-0115",
+   "email": "stay@example.com",
+   "street": "1 Lakeview Dr",
+   "city": "Springfield",
+   "state": "IL",
+   "postal_code": "62707",
+   "source_data": {},
+   "imported_at": "2026-01-01T12:00:00Z"
+  }
+ }
+]

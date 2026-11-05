@@ -1,0 +1,87 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block task_shortcuts %}<a class="shortcut" href="/tags/">Tag Generator</a><a class="shortcut" href="/tags/furniture-sets/new/">New Furniture Set Tag</a><a class="shortcut" href="/purchasing/items/">Item List</a>{% endblock %}{% block content %}<style>
+.set-form{display:flex;flex-direction:column;flex:1;min-height:0}
+.set-head{display:grid;grid-template-columns:minmax(220px,1fr) minmax(260px,1.3fr);gap:14px;padding:12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf}
+.set-head textarea{min-height:58px;resize:vertical;font-weight:bold;color:#1b6b3a;text-align:center}
+.set-head .hint{font-size:11px;color:#626b75}
+.set-lines td{vertical-align:top;white-space:normal}.set-lines .desc{white-space:pre-line;color:#485365;font-size:12px;min-width:260px}
+.set-lines .qty{width:80px;text-align:right}.set-lines .warn{color:#923328;font-size:12px;display:block}
+.set-foot{display:flex;gap:20px;justify-content:space-between;padding:12px;background:#f0f0f0;border-top:1px solid #ccc;flex-wrap:wrap}
+.set-foot .totals{min-width:280px}
+.saved-message{padding:8px 12px;background:#e7f5d6;color:#365424;border-bottom:1px solid #c1d4ac;font-size:13px}
+.export-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px;flex-wrap:wrap}.export-bar .label{color:#485365}.export-bar select{padding:6px;font:inherit;border:1px solid #aeb7c3;border-radius:2px;background:white}
+.export-bar .print-status{font-size:12px;color:#2f6b3f}.export-bar .print-status.bad{color:#923328}
+</style>
+{% if saved %}<div class="saved-message" role="status">Saved "{{ tag_set.name }}". Prices come from the Item List each time the tag prints.</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+{% if trashed_lines %}<div class="error" role="alert"><strong>This set holds {{ trashed_lines|length }} item{{ trashed_lines|length|pluralize }} that {{ trashed_lines|length|pluralize:'is,are' }} in the Items Trash:</strong> {% for name in trashed_lines %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}. The tag still prints with the Item List price, but the item is no longer for sale. Restore it from the Items Trash (admin sign-in) or remove it from the set.</div>{% endif %}
+{% if tag_set.pk %}<div class="export-bar no-print" id="tag-print-bar" data-print-url="/tags/furniture-sets/{{ tag_set.token }}/print/" data-pdf-url="/tags/furniture-sets/{{ tag_set.token }}/pdf/"><span class="label">Print Set Tag</span><a class="button" id="tag-pdf" href="/tags/furniture-sets/{{ tag_set.token }}/pdf/" target="_blank" rel="noopener">PDF</a><button class="button" type="button" id="tag-direct-print" {% if not printers %}disabled title="No Letter printers are set up"{% endif %}>Direct Print</button><select id="tag-printer" aria-label="Printer" {% if not printers %}disabled{% endif %}>{% for p in printers %}<option value="{{ p.pk }}" {% if selected_printer == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No Letter printers</option>{% endfor %}</select><label>Copies <select id="tag-copies" aria-label="Copies">{% for n in copy_choices %}<option {% if n == tag_set.copies %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label><span class="print-status" id="tag-print-status" role="status" hidden></span></div>{% endif %}
+<form method="post" class="set-form" id="set-form">{% csrf_token %}
+<div class="set-head"><label class="field">Set name (not printed) *<input name="name" value="{{ tag_set.name }}" maxlength="200" required placeholder='e.g. Eagle Ridge dining set'></label>
+<label class="field">Message printed in green<textarea name="tagline" maxlength="300" rows="2">{% if tag_set.pk or error %}{{ tag_set.tagline }}{% else %}{{ default_tagline }}{% endif %}</textarea><span class="hint">Up to 4 lines. Leave blank for no message.</span></label></div>
+<div class="tools"><details class="action-menu"><summary class="want">I Want to…</summary><div><a href="/purchasing/items/" target="_blank" rel="noopener">Select from Item List</a><a href="/tags/">Saved Set Tags</a></div></details><div class="lookup"><label class="field">Add item to the set<input id="item-search" type="search" placeholder="Scan or enter item name, number or description" autocomplete="off" maxlength="100"></label><div id="item-results" class="results"></div></div></div>
+<div class="table-scroll"><table class="set-lines"><thead><tr><th>Item Name</th><th>Description</th><th class="number">Price</th><th class="number">Qty</th><th class="number">Ext Price</th><th></th></tr></thead><tbody id="set-lines">
+{% for line in lines %}<tr data-price="{% if line.item and line.item.price != None %}{{ line.item.price }}{% else %}0{% endif %}" data-rate="{% if line.item and line.item.tax_rate != None %}{{ line.item.tax_rate }}{% endif %}"><td>{% if line.item %}<input type="hidden" name="item" value="{{ line.item.pk }}">{{ line.item.display_name }}{% if not line.item.active %}<span class="warn">In Items Trash — no longer for sale</span>{% endif %}{% if line.item.price == None %}<span class="warn">No price in Item List</span>{% endif %}{% else %}{{ line.missing_name }}<span class="warn">No longer in the Item List — remove it</span>{% endif %}</td><td class="desc">{% if line.item %}{{ line.item.description }}{% endif %}</td><td class="number price"></td><td class="number">{% if line.item %}<input class="qty" name="quantity" type="number" min="1" max="9999" step="1" value="{{ line.quantity|qty }}" aria-label="Quantity">{% endif %}</td><td class="number ext"></td><td><button class="button" type="button" data-remove>Remove</button></td></tr>
+{% endfor %}</tbody></table><div class="empty" id="set-empty" {% if lines %}hidden{% endif %}><strong>No items in this set yet</strong>Search above to add the table, chairs and other pieces, or select them in Item List and choose Make Furniture Set Tag.</div></div>
+<div class="set-foot"><div class="notice" style="border:0;background:none;padding:0;max-width:560px">Prices are read from the Item List when the tag prints, so a price change shows on the next printout. Tax is {{ shop_tax.default_location.receipt_label }} {{ shop_tax.line_rate_text }}% unless the item's tax rate is different. Cents are cut off, never rounded.</div>
+<dl class="totals"><dt>Subtotal</dt><dd id="set-subtotal">$0.00</dd><dt id="set-tax-label">{{ shop_tax.default_location.receipt_label }} {{ shop_tax.line_rate_text }} % Tax</dt><dd id="set-tax">$0.00</dd><dt class="grand">Set Total</dt><dd class="grand" id="set-total">$0.00</dd></dl></div>
+<input type="hidden" name="copies" id="copies-field" value="{{ tag_set.copies }}">
+<div class="actions">{% if tag_set.pk %}<button class="button left" type="button" id="delete-set">Delete Set Tag</button>{% else %}<a class="button left" href="/tags/">Cancel</a>{% endif %}<button class="button primary" name="then" value="stay">Save</button><button class="button primary" name="then" value="print">Save &amp; Print</button></div>
+</form>
+{% if tag_set.pk %}<form method="post" id="delete-form" action="/tags/furniture-sets/{{ tag_set.token }}/delete/" hidden>{% csrf_token %}</form>
+<dialog id="confirm-dialog"><h2>Delete Set Tag</h2><form method="dialog"><p>Delete the saved set tag "{{ tag_set.name }}"? The items stay in the Item List.</p><div class="actions"><button class="button" value="cancel">Go Back</button><button class="button primary" value="confirm">Delete</button></div></form></dialog>{% endif %}
+{{ tag_set.pk|yesno:"1,0"|json_script:"tag-saved" }}
+<script>
+(()=>{
+const body=document.getElementById('set-lines'),empty=document.getElementById('set-empty'),search=document.getElementById('item-search'),results=document.getElementById('item-results');
+const DEFAULT_RATE=7;
+const cents=v=>Math.sign(v)*Math.floor(Math.round(Math.abs(v)*1000000)/10000+0.5)/100; // half-up cents
+const money=v=>(v<0?'-$':'$')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+let dirty=false;
+function recalc(){
+  let subtotal=0;const taxed={};
+  [...body.rows].forEach(row=>{const price=cents(Number(row.dataset.price)||0),q=row.querySelector('.qty'),qty=q?Number(q.value)||0:0,ext=cents(qty*price);
+    row.querySelector('.price').textContent=money(price);row.querySelector('.ext').textContent=money(ext);subtotal+=ext;
+    const rate=row.dataset.rate===undefined||row.dataset.rate===''?DEFAULT_RATE:Number(row.dataset.rate);if(rate)taxed[rate]=(taxed[rate]||0)+ext;});
+  const rates=Object.keys(taxed);let tax=0;rates.forEach(r=>tax+=cents(taxed[r]*Number(r)/100));
+  document.getElementById('set-tax-label').textContent=rates.length===1?`{{ shop_tax.default_location.receipt_label|escapejs }} ${Number(rates[0])} % Tax`:'Tax';
+  subtotal=Math.round(subtotal*100)/100;tax=Math.round(tax*100)/100;
+  document.getElementById('set-subtotal').textContent=money(subtotal);document.getElementById('set-tax').textContent=money(tax);document.getElementById('set-total').textContent=money(Math.round((subtotal+tax)*100)/100);
+  empty.hidden=body.rows.length>0;
+}
+function wire(row){row.querySelector('[data-remove]').onclick=()=>{row.remove();dirty=true;recalc();};row.querySelector('.qty')?.addEventListener('input',()=>{dirty=true;recalc();});}
+[...body.rows].forEach(wire);
+function add(item){
+  const existing=[...body.querySelectorAll('input[name=item]')].find(i=>i.value===String(item.id));
+  if(existing){const q=existing.closest('tr').querySelector('.qty');q.value=Number(q.value||0)+1;dirty=true;recalc();return;}
+  const row=document.createElement('tr');row.dataset.price=item.price||'0';row.dataset.rate=item.tax_rate??'';
+  const name=document.createElement('td');const hidden=document.createElement('input');hidden.type='hidden';hidden.name='item';hidden.value=item.id;name.append(hidden,item.label);
+  if(!item.price){const w=document.createElement('span');w.className='warn';w.textContent='No price in Item List';name.append(w);}
+  const desc=document.createElement('td');desc.className='desc';desc.textContent=item.description||'';
+  row.append(name,desc);
+  row.insertAdjacentHTML('beforeend','<td class="number price"></td><td class="number"><input class="qty" name="quantity" type="number" min="1" max="9999" step="1" value="1" aria-label="Quantity"></td><td class="number ext"></td><td><button class="button" type="button" data-remove>Remove</button></td>');
+  body.append(row);wire(row);dirty=true;recalc();
+}
+let timer,seq=0;
+search.addEventListener('input',()=>{clearTimeout(timer);const q=search.value.trim();if(!q){results.replaceChildren();return;}timer=setTimeout(async()=>{const mine=++seq;
+  try{const r=await fetch('/pos/lookup/items/?q='+encodeURIComponent(q));const d=await r.json();if(mine!==seq)return;
+    results.replaceChildren(...(d.results.length?d.results.map(item=>{const b=document.createElement('button');b.type='button';b.textContent=item.label;const s=document.createElement('small');s.textContent=[item.sku,item.description,item.price?('$'+Number(item.price).toFixed(2)):'No price',item.on_hand!==null?('On hand '+item.on_hand):''].filter(Boolean).join(' · ');b.append(s);b.onclick=()=>{add(item);results.replaceChildren();search.value='';search.focus();};return b;}):[Object.assign(document.createElement('p'),{textContent:'No matching items.'})]));
+  }catch(e){results.replaceChildren(Object.assign(document.createElement('p'),{textContent:'Item search is unavailable. Check the connection.'}));}},200);});
+search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();results.querySelector('button')?.click();}if(e.key==='Escape')results.replaceChildren();});
+const form=document.getElementById('set-form');form.addEventListener('input',e=>{if(e.target!==search)dirty=true;});
+form.addEventListener('submit',e=>{if(!body.querySelector('input[name=item]')){e.preventDefault();alert('Add at least one item to the set.');return;}dirty=false;});
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+const copies=document.getElementById('tag-copies');if(copies){copies.addEventListener('change',()=>{document.getElementById('copies-field').value=copies.value;document.getElementById('tag-pdf').href=document.getElementById('tag-print-bar').dataset.pdfUrl+'?copies='+copies.value;});}
+const bar=document.getElementById('tag-print-bar');
+if(bar){const button=document.getElementById('tag-direct-print'),select=document.getElementById('tag-printer'),status=document.getElementById('tag-print-status'),csrf=document.querySelector('#set-form [name=csrfmiddlewaretoken]').value;
+  const show=(t,bad)=>{status.textContent=t;status.hidden=false;status.classList.toggle('bad',!!bad);};
+  async function directPrint(){if(button.disabled)return;if(dirty){show('Save your changes before printing.',true);return;}button.disabled=true;show('Sending to '+select.options[select.selectedIndex].text+'…');
+    try{const r=await fetch(bar.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':csrf},body:new URLSearchParams({printer:select.value,copies:copies.value})});const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);}
+    catch{show('Could not reach the server. Check the connection and try again.',true);}finally{button.disabled=false;}}
+  button.addEventListener('click',directPrint);
+  const url=new URL(location.href);if(url.searchParams.get('print')==='1'){url.searchParams.delete('print');history.replaceState(null,'',url.pathname+url.search);if(!button.disabled)directPrint();else window.open(bar.dataset.pdfUrl+'?copies='+copies.value,'_blank','noopener');}
+}
+const del=document.getElementById('delete-set');if(del){del.onclick=()=>{const d=document.getElementById('confirm-dialog');d.returnValue='cancel';d.showModal();d.addEventListener('close',()=>{if(d.returnValue==='confirm'){dirty=false;document.getElementById('delete-form').submit();}},{once:true});};}
+recalc();
+})();
+</script>{% endblock %}

@@ -1,0 +1,65 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block extra_style %}<style>
+.scan-tools{display:flex;gap:10px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px;flex-wrap:wrap}
+.scan-tools select{font:inherit;padding:3px 6px}.scan-tools .msg{margin-left:auto;color:#485365}.scan-tools .msg.err{color:#8a1f1f;font-weight:bold}
+.scan-wrap{overflow:auto;padding:12px 14px;flex:1;display:grid;grid-template-columns:minmax(380px,1fr) minmax(420px,1.2fr);gap:14px}
+.scan-card{border:1px solid var(--brand-border);border-radius:6px;background:#fff;overflow:hidden}
+.scan-card h2{margin:0;padding:8px 12px;background:var(--brand-green);color:#fff;font-size:14px}
+.scan-card .body{padding:10px 12px;font-size:13px}
+#scan-box{font:inherit;font-size:22px;padding:8px 10px;width:100%;box-sizing:border-box;border:2px solid var(--brand-green);border-radius:4px}
+#scan-box:focus{outline:3px solid #b8cec0}
+.result{margin:8px 0;padding:8px 10px;border-radius:4px;font-size:16px;font-weight:bold;background:#f3f5f4;min-height:22px}
+.result.ok{background:#e7f0e9;color:#1f5a33}.result.repeat{background:#fff4d6;color:#7a5a0a}.result.err{background:#f8e1e1;color:#8a1f1f}
+table.log{width:100%;border-collapse:collapse;font-size:13px;white-space:normal}table.log th{text-align:left;font-weight:normal;color:#485365;padding:5px 8px;border-bottom:1px solid #ccc;background:#fff;position:static}
+table.log td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}table.log td input{font:inherit;width:100%;box-sizing:border-box;padding:2px 4px}
+table.log tr.repeat td{color:#7a5a0a}table.log tr.err td{color:#8a1f1f}
+.codes{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}.codes figure{margin:0;text-align:center}.codes figcaption{font-size:12px;color:#485365;margin-top:4px}.codes figure code{display:block;font-size:10px;color:#6b7480}
+.note{font-size:12px;color:#485365;line-height:1.5;margin-top:8px}
+</style>{% endblock %}{% block task_shortcuts %}<a class="shortcut" href="/">Home</a><a class="shortcut" href="/server-status/">Server Status</a><a class="shortcut" href="/printers/">Printers</a>{% endblock %}{% block content %}
+<form id="scan-print" class="scan-tools" data-print-url="/scanner-test/print/">{% csrf_token %}
+<label>Printer <select name="printer">{% for p in printers %}<option value="{{ p.pk }}"{% if printer and p.pk == printer.pk %} selected{% endif %}>{{ p.name }}{% if p.media_source %} ({{ p.get_media_source_display }}){% endif %}</option>{% endfor %}</select></label>
+<button type="submit" class="button" id="scan-print-button">Print test sheet</button>
+<a class="button" href="/scanner-test/sheet.pdf" target="_blank">Preview PDF</a>
+<span class="msg" id="scan-print-msg">Admin tool · prints the QR sheet{% if printer %} on {{ printer.name }}{% if printer.media_source %} ({{ printer.get_media_source_display }}){% endif %}{% endif %}</span>
+</form>
+<div class="scan-wrap">
+<section class="scan-card"><h2>Scan here</h2><div class="body">
+<input id="scan-box" type="text" autocomplete="off" autofocus placeholder="Point the scanner at a code — scans land here" aria-label="Scan box">
+<div class="result" id="scan-result">Waiting for the first scan.</div>
+<p class="note">Each scan logs on the right with the time, what the scanner typed and the code it carries. The same code scanned again warns and is still logged. Type the distance (or "no read") in the Distance column; nothing is saved, so copy the table before leaving.</p>
+<div class="note">Codes on the printed sheet: {% for c in codes %}{{ c.caption }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>
+</div></section>
+<section class="scan-card"><h2>Scan log</h2><div class="body"><table class="log" id="scan-log"><thead><tr><th style="width:4%">#</th><th style="width:11%">Time</th><th style="width:34%">Scanner typed</th><th style="width:19%">Code</th><th style="width:32%">Distance / note</th></tr></thead><tbody></tbody></table>
+<p class="note"><button type="button" class="button" id="scan-clear">Clear log</button></p></div></section>
+<section class="scan-card" style="grid-column:1 / -1"><h2>The codes on the sheet (same codes, screen copy)</h2><div class="body"><div class="codes">{% for c in codes %}<figure>{{ c.svg|safe }}<figcaption>{{ c.caption }}</figcaption><code>{{ c.payload }}</code></figure>{% endfor %}</div>
+<p class="note">Screen sizes are approximate; use the printed sheet for distances. The codes are fake TEST codes in the PO item label format; they don't exist on any purchase order.</p></div></section>
+</div>
+<script>
+(function(){
+  const box=document.getElementById('scan-box'),result=document.getElementById('scan-result'),log=document.querySelector('#scan-log tbody');
+  const seen=new Map();let n=0,audio=null;
+  function beep(kind){try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();const t=audio.currentTime;
+    const tones=kind==='ok'?[[1320,0,0.12]]:kind==='repeat'?[[440,0,0.12],[440,0.18,0.12]]:[[220,0,0.45]];
+    for(const [f,at,len] of tones){const o=audio.createOscillator(),g=audio.createGain();o.type='square';o.frequency.value=f;g.gain.value=0.15;o.connect(g);g.connect(audio.destination);o.start(t+at);o.stop(t+at+len);}}catch(e){}}
+  function parse(text){const s=text.trim();if(!s)return null;let code=s;
+    if(/[=?\/]/.test(s)){try{const u=new URL(s.startsWith('http')?s:'https://'+s);code=u.searchParams.get('wc')||u.searchParams.get('WC')||'';}catch(e){code='';}}
+    code=code.toUpperCase().replace(/\s+/g,'');return /^WC-?[A-Z0-9]{4}-?[A-Z0-9]{4}$/.test(code)?code.replace(/^WC-?([A-Z0-9]{4})-?([A-Z0-9]{4})$/,'WC-$1-$2'):'';}
+  function row(text,code,kind){n++;const tr=document.createElement('tr');tr.className=kind;const when=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'});
+    tr.innerHTML=`<td>${n}</td><td>${when}</td><td></td><td></td><td><input type="text" placeholder="e.g. 4 ft" aria-label="Distance or note"></td>`;
+    tr.children[2].textContent=text;tr.children[3].textContent=code||'(not a piece code)';log.prepend(tr);}
+  function handle(text){const code=parse(text);let kind='ok',msg;
+    if(!code){kind='err';msg='Not a piece code: '+text;}else if(seen.has(code)){kind='repeat';msg=`Repeat: ${code} (first scanned ${seen.get(code)})`;}else{seen.set(code,new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'}));msg='Read OK: '+code;}
+    result.className='result '+kind;result.textContent=msg;beep(kind);row(text,code,kind);}
+  box.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const v=box.value;box.value='';if(v.trim())handle(v);}});
+  document.addEventListener('click',e=>{if(!(e.target.closest('input,select,button,a,textarea')))setTimeout(()=>box.focus(),0);});
+  box.addEventListener('blur',()=>{setTimeout(()=>{const a=document.activeElement;if(!a||a===document.body)box.focus();},150);});
+  document.getElementById('scan-clear').addEventListener('click',()=>{log.innerHTML='';seen.clear();n=0;result.className='result';result.textContent='Log cleared.';box.focus();});
+  const form=document.getElementById('scan-print'),msg=document.getElementById('scan-print-msg'),btn=document.getElementById('scan-print-button');
+  form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;msg.className='msg';msg.textContent='Sending…';
+    try{const r=await fetch(form.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrfmiddlewaretoken]').value},body:new FormData(form)});const d=await r.json();
+      msg.className='msg'+(r.ok?'':' err');msg.textContent=d.message||d.error||'Print failed.';}catch(err){msg.className='msg err';msg.textContent='Print failed: '+err;}
+    btn.disabled=false;box.focus();});
+  box.focus();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,19 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% load report_tags %}
+<style>.daily-table{font-size:12px}.daily-table .number{white-space:nowrap}.daily-table th{font-size:11px}.daily-table td{padding:6px 5px}.daily-documents summary{padding:10px 12px;font-weight:bold;cursor:pointer;background:var(--brand-tint)}</style>
+<div class="table-scroll">
+<div class="report-section-title">By day</div>
+<table class="report-table daily-table"><thead><tr>{% for c in report.day_columns %}<th {% if c.total %}class="number"{% endif %}>{{ c.label }}</th>{% endfor %}</tr></thead><tbody>
+{% for row in report.days %}<tr>{% for c in report.day_columns %}<td {% if c.total %}class="number"{% endif %}>{% if c.kind == 'date' %}{{ row.date|date:'n/j/Y' }}{% else %}{% cell row c %}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+<tr class="grand">{% total_row report.overview report.totals 'Grand total' %}</tr>
+</tbody></table>
+<table class="report-table" id="returns-summary"><thead><tr><th>Sales / Returns / Net</th><th class="number">Amount</th></tr></thead><tbody>{% for row in report.summary %}<tr><td>{{ row.label }}</td><td class="number">${{ row.amount|floatformat:2 }}</td></tr>{% endfor %}</tbody></table>
+<details class="daily-documents" open><summary>Documents · {{ report.lines }} rows</summary>
+<table class="report-table daily-table"><thead><tr>{% for c in report.columns %}<th {% if c.total %}class="number"{% endif %}>{{ c.label }}</th>{% endfor %}</tr></thead><tbody>
+{% for g in report.groups %}<tr class="group"><td colspan="13">{{ g.label }}</td></tr>
+{% for row in g.rows %}<tr>{% for c in report.columns %}<td {% if c.total %}class="number"{% endif %}>{% if c.kind == 'date' %}{{ row.date|date:'n/j/Y' }}{% elif c.key == 'new_sale' and row.new_sale == None %}{% elif c.key == 'balance' and row.balance == None %}{% else %}{% cell row c %}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+<tr class="subtotal">{% total_row report g.totals 'Day total' %}</tr>{% empty %}<tr><td colspan="13">No documents in this period.</td></tr>{% endfor %}
+<tr class="grand">{% total_row report report.totals 'Grand total' %}</tr>
+</tbody></table></details>
+<div class="report-note">{% for note in report.notes %}{{ note }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div>
+</div>

@@ -1,0 +1,11 @@
+{% extends "settings/base.html" %}{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% block content %}<div class="settings-wrap">
+<section class="settings-panel"><h2>Migrate from QuickBooks POS</h2>
+<p>Upload the Items, Customers and Vendors files from the Export utility / Export to Excel. Departments come from items. Use CSV (comma or tab), TXT/TSV, or XLSX; text may be UTF-8 or Windows cp1252. Save older XLS files as XLSX or CSV first. Maximum 20 MB and 100,000 data rows per file.</p>
+<p>Every upload gets a dry run before Import is available. Review unknown columns, duplicate rows, department mappings and tax categories. Possible duplicates are skipped for manual review.</p>
+<p>The optional Sales History report becomes read-only receipts. The report must have receipt number, date, item, quantity, price, line extension and line tax. Tender labels alone do not supply payment amounts: those receipts import totals only, and payment-based reports will be incomplete.</p>
+<p>Backups (.qpb), open orders, deposits, account balances, gift balances and purchase history are not supported by this export path.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}
+<p>Opening vouchers explain the exported on-hand quantities and costs without replaying old sales. Untick the opening-voucher choice to set on-hand directly without receiving movements. Re-importing identical files preserves current stock and costs.</p>
+<button class="button primary">Parse and preview</button> <a class="button" href="{% url 'qbpos-imports' %}">Past imports</a></form>
+</section></div>{% endblock %}

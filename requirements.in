@@ -1,0 +1,8 @@
+Django>=5.2,<5.3
+gunicorn>=23,<24
+psycopg[binary]>=3.2,<4
+Pillow>=12.3,<13
+openpyxl>=3.1,<4
+reportlab>=4.2,<5
+pypdfium2>=4.30,<6
+segno>=1.6,<2

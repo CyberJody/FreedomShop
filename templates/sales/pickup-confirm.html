@@ -1,0 +1,6 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% comment %}Mark Picked Up asks first (receipt screen and the Awaiting Pickup screen).{% endcomment %}
+<script>
+/* Mark Picked Up asks first (the app's confirm dialog); the server refuses anything not awaiting pickup anyway. */
+document.addEventListener('submit',e=>{const form=e.target.closest&&e.target.closest('form[data-confirm]');if(!form||form.dataset.confirmed)return;e.preventDefault();const dialog=document.getElementById('confirm-dialog');if(!dialog){form.dataset.confirmed='1';form.requestSubmit();return;}document.getElementById('confirm-message').textContent=form.dataset.confirm;dialog.returnValue='cancel';dialog.addEventListener('close',()=>{if(dialog.returnValue==='confirm'){form.dataset.confirmed='1';form.requestSubmit();}},{once:true});dialog.showModal();});
+</script>

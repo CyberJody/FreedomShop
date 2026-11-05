@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Unit]
+Description=FreedomShop daily backup
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/freedomshop backup --keep 14
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
+UMask=0077

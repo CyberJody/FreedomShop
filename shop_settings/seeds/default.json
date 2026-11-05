@@ -1,0 +1,43 @@
+{
+  "_comment": "A new shop's starting setup. Tax: one taxable location at the default rate (0 until the owner sets it) and one exempt location; calendar tax year. Business: a placeholder name, no address or logo.",
+  "tax": {
+    "charge_tax": true,
+    "default_rate": "0",
+    "default_location": "Local",
+    "basis": "cash",
+    "filing_frequency": "quarterly",
+    "tax_year_start_month": 1,
+    "estimate_rule": ""
+  },
+  "locations": [
+    {
+      "name": "Local",
+      "rate": "0",
+      "label": "",
+      "report_label": ""
+    },
+    {
+      "name": "Exempt",
+      "rate": "0",
+      "is_exempt": true,
+      "report_label": "Exempt"
+    }
+  ],
+  "categories": [
+    {
+      "name": "Taxable",
+      "taxable": true
+    },
+    {
+      "name": "Non-taxable",
+      "taxable": false
+    }
+  ],
+  "business": {
+    "name": "My Shop",
+    "return_policy": "Set your return policy in File > Business Settings.",
+    "receipt_footer": "Thank you for your order!",
+    "receipt_copies": 2,
+    "order_copies_default": 3
+  }
+}

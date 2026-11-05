@@ -1,0 +1,19 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ title }} · Step {{ number }} of {{ total }} · FreedomShop · Point of Sale</title>{% include "styles.html" %}<style>
+body{background:var(--brand-tint)}.setup-card{margin:30px auto;padding:24px 28px;background:#fff;border:1px solid var(--brand-border);border-radius:8px;width:min(860px,96%);box-shadow:0 4px 18px #0001}
+.setup-steps{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:0 0 18px;counter-reset:step}.setup-steps li{counter-increment:step;padding:5px 10px;border-radius:14px;background:#eef2ef;color:#46594d;font-size:13px}
+.setup-steps li::before{content:counter(step) ". "}.setup-steps li.done{background:var(--brand-hover)}.setup-steps li.current{background:var(--brand-green);color:#fff;font-weight:bold}
+.setup-grid{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px 18px}.setup-grid label{display:block;font-size:13px;margin-bottom:4px}
+.setup-grid input:not([type=checkbox]),.setup-grid select{width:100%;padding:7px;border:1px solid #aab9ae;border-radius:4px;font:inherit;background:#fff}.setup-wide{grid-column:1/-1}
+.helptext{display:block;color:#5b6573;font-size:12px;margin-top:3px}.errorlist{color:#8b231d;padding-left:18px;margin:4px 0}.setup-note{color:#46594d;line-height:1.5}
+.setup-message{background:#e7f5d6;color:#365424;padding:10px 12px;margin:12px 0}.setup-error{background:#fbe9e7;color:#8b231d;padding:10px 12px;margin:12px 0}
+.setup-actions{display:flex;gap:10px;align-items:center;margin-top:22px;padding-top:14px;border-top:1px solid #e1e6ec}.setup-actions .spacer{flex:1}
+.setup-button{display:inline-block;padding:9px 16px;border:1px solid #aab9ae;border-radius:4px;background:#fff;color:#1b2b22;text-decoration:none;cursor:pointer}
+.setup-button.primary{background:var(--brand-green);border-color:var(--brand-green-dark);color:#fff;font-weight:bold}.setup-button:disabled{opacity:.5;cursor:not-allowed}
+.setup-table{border-collapse:collapse}.setup-table td,.setup-table th{padding:4px 8px 4px 0;text-align:left}.setup-table input{padding:6px;border:1px solid #aab9ae;border-radius:4px;font:inherit}
+.setup-default{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}/* Enter in a field = this (Next), not a preset or test button */
+@media(max-width:620px){.setup-grid{grid-template-columns:1fr}}</style></head>
+<body><div class="titlebar">FreedomShop <span class="product-subtitle">Point of Sale</span></div>
+<main class="setup-card"><ol class="setup-steps" aria-label="Setup steps">{% for slug, label in steps %}<li class="{% if slug == step %}current{% elif forloop.counter < number %}done{% endif %}"{% if slug == step %} aria-current="step"{% endif %}>{{ label }}</li>{% endfor %}</ol>
+<p class="helptext">{% if rerun %}Run Setup Again{% else %}First-Run Setup{% endif %} · Step {{ number }} of {{ total }}{% if rerun %} · Changes save as you go.{% endif %}</p>
+{% block step %}{% endblock %}</main></body></html>

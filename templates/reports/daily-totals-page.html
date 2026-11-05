@@ -1,0 +1,19 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "reports/sales-tax.html" %}
+{% block task_shortcuts %}<a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/reports/sales-tax/">Sales Tax</a><a class="shortcut" href="/pos/history/">Sales History</a><a class="shortcut" href="/">Home</a>{% endblock %}
+{% block content %}
+<form method="get" class="report-options" id="tax-options">
+<label class="field">Period<select name="period" id="period-kind"><option value="today" {% if period.kind == 'today' %}selected{% endif %}>Today</option><option value="yesterday" {% if period.kind == 'yesterday' %}selected{% endif %}>Yesterday</option><option value="month" {% if period.kind == 'month' %}selected{% endif %}>Month</option><option value="quarter" {% if period.kind == 'quarter' %}selected{% endif %}>Sales Tax Quarter</option><option value="year" {% if period.kind == 'year' %}selected{% endif %}>Sales Tax Year</option><option value="custom" {% if period.kind == 'custom' %}selected{% endif %}>Custom Dates</option></select></label>
+<label class="field" data-kind="month">Month<select name="month">{% for value, label in months %}<option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field wide" data-kind="quarter">Quarter<select name="quarter">{% for value, label in quarters %}<option value="{{ value }}" {% if value == selected_quarter %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field wide" data-kind="year">Sales Tax Year<select name="year">{% for value, label in years %}<option value="{{ value }}" {% if value == selected_year %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field" data-kind="custom">From<input type="date" name="start" value="{{ custom_start|date:'Y-m-d' }}"></label>
+<label class="field" data-kind="custom">Through<input type="date" name="end" value="{{ custom_end|date:'Y-m-d' }}"></label>
+<div class="buttons"><button class="button primary" name="run" value="1">Display Report</button><a class="button" href="/reports/daily-totals/">Reset</a></div>
+</form>
+{% if report %}
+<div class="export-bar" id="export-bar" data-print-url="/reports/daily-totals/print/"><span class="label">Save as</span><a class="button" href="?{{ params }}&amp;format=xlsx">Excel</a><a class="button" href="?{{ params }}&amp;format=pdf">PDF</a><button class="button" type="button" id="direct-print" {% if not printers %}disabled title="No Letter printers are set up"{% endif %}>Direct Print</button><select id="report-printer" aria-label="Printer" {% if not printers %}disabled{% endif %}>{% for p in printers %}<option value="{{ p.pk }}" {% if selected_printer == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No Letter printers</option>{% endfor %}</select><span class="print-status" id="print-status" role="status" hidden></span><span class="summary">{{ report.subtitle }} · {{ report.lines }} document row{{ report.lines|pluralize }}</span></div>
+<form id="print-options" hidden>{% csrf_token %}<input type="hidden" name="period" value="{{ period.kind }}"><input type="hidden" name="month" value="{{ selected_month }}"><input type="hidden" name="quarter" value="{{ selected_quarter }}"><input type="hidden" name="year" value="{{ selected_year }}"><input type="hidden" name="start" value="{{ period.start|date:'Y-m-d' }}"><input type="hidden" name="end" value="{{ period.end|date:'Y-m-d' }}"></form>
+{% include "reports/daily-totals.html" %}
+{% elif not ran %}<div class="empty"><strong>Daily Totals</strong>{{ period.label }} · Choose a period, then Display Report.</div>{% endif %}
+{% endblock %}

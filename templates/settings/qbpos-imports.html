@@ -1,0 +1,10 @@
+{% extends "settings/base.html" %}{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% block content %}<div class="settings-wrap"><p><a class="button" href="{% url 'qbpos-upload' %}">New migration upload</a></p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p>Undo removes this import's rows or restores its updates only while they have no subsequent edits or history outside the import. Receipts imported in the same batch may be removed together. An identical-file re-import does not acquire ownership of earlier rows.</p>
+{% for log in page %}<section class="settings-panel"><h2>{{ log.get_status_display }} — {{ log.created_at }}</h2><p>Import ID: {{ log.pk }}</p>
+{% for file in log.files %}<p>{{ file.kind }}: {{ file.name }} ({{ file.row_count }} rows)</p>{% endfor %}
+{% include 'settings/qbpos-summary.html' with summary=log.summary %}
+{% if log.status == 'preview' %}<a class="button" href="{% url 'qbpos-preview' log.pk %}">Review preview</a>{% elif log.status == 'committed' %}<form method="post" action="{% url 'qbpos-undo' log.pk %}">{% csrf_token %}<button class="button">Undo this import</button></form>{% endif %}</section>{% empty %}<p>No imports yet.</p>{% endfor %}
+{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %} {{ page.number }} / {{ page.paginator.num_pages }} {% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}
+</div>{% endblock %}

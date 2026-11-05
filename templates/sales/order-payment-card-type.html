@@ -1,0 +1,2 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<label class="card-type">Card type <select name="card_type"><option value="">Card type…</option>{% for name in card_types %}<option value="{{ name }}" {% if current == name %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>

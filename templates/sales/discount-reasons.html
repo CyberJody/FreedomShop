@@ -1,0 +1,6 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends 'sales/base.html' %}{% block content %}
+<div class="notice">Rename or turn off reasons for future discounts. Saved receipts keep their original reason and note.</div>{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% for reason in reasons %}<form class="tools" method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ reason.pk }}"><input name="name" maxlength="100" required value="{{ reason.name }}" aria-label="Discount reason"><label><input name="active" type="checkbox" {% if reason.active %}checked{% endif %}> Active</label><button class="button">Save</button></form>{% endfor %}
+<form class="tools" method="post">{% csrf_token %}<input name="name" maxlength="100" required placeholder="New discount reason"><button class="button primary">Add Reason</button></form><a class="button" href="/pos/sale/new/">Make a Sale</a>
+{% endblock %}

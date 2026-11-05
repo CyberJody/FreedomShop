@@ -1,0 +1,17 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "setup/base.html" %}
+{% block step %}<h1>Your business</h1>
+<p class="setup-note">This prints on receipts, sales orders, tags and reports. Only the name is required; you can change any of it later in File &gt; Business Settings.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.non_field_errors }}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+<div class="setup-grid">
+{% include "setup/field.html" with field=form.name %}{% include "setup/field.html" with field=form.legal_name %}
+{% include "setup/field.html" with field=form.address_line1 %}{% include "setup/field.html" with field=form.address_line2 %}
+{% include "setup/field.html" with field=form.city %}{% include "setup/field.html" with field=form.region %}
+{% include "setup/field.html" with field=form.postal_code %}{% include "setup/field.html" with field=form.country %}
+{% include "setup/field.html" with field=form.phone %}{% include "setup/field.html" with field=form.email %}
+{% include "setup/field.html" with field=form.website %}
+<div>{{ form.logo.label_tag }}{{ form.logo }}{{ form.logo.errors }}<span class="helptext">{% if row.logo %}A logo is saved; choose a file to replace it.{% else %}{{ form.logo.help_text }}{% endif %}</span>{% if row.logo %}<label>{{ form.remove_logo }} {{ form.remove_logo.label }}</label>{% endif %}</div>
+{% include "setup/field.html" with field=form.time_zone %}{% include "setup/field.html" with field=form.currency %}
+</div>
+<div class="setup-actions"><span class="spacer"></span><button class="setup-button primary">Next</button></div></form>
+{% endblock %}

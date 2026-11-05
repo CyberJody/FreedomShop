@@ -1,0 +1,53 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FreedomShop · Point of Sale</title>
+{% include "styles.html" %}
+</head>
+<body>
+{% include "icons.html" %}
+<header>
+<div class="titlebar"><svg class="title-icon" aria-hidden="true"><use href="#register"/></svg><span class="brand"><span class="product-name">FreedomShop <span class="product-subtitle">Point of Sale</span></span>{% if business.name %}<span class="business-name">{{ business.name }}</span>{% endif %}</span></div>
+<nav class="menubar" aria-label="Application menu">
+{% include "file-menu.html" %}{% include "sales/menu.html" %}{% include "customers/menu.html" %}<a class="menu-link" href="/purchasing/items/">Inventory</a>{% include "purchasing/menu.html" %}{% include "help-menu.html" %}{% if admin_mode %}<a class="menu-link" href="/reports/">Reports</a>{% endif %}{% if admin_mode %}<span class="menubar-status"><a class="admin-mode-badge{% if server_health == 'bad' %} bad{% endif %}" href="/server-status/" title="Server status: {{ server_health|default:'ok' }}"><span class="health {{ server_health|default:'ok' }}"></span>ADMIN MODE</a></span>{% endif %}
+</nav>
+<div class="toolbar">
+<div class="tabs"><button class="tab home-tab" aria-current="page"><svg aria-hidden="true"><use href="#home"/></svg>Home</button>{% include "windows-menu.html" %}</div>
+<details class="pos-menu home-actions"><summary class="want">I Want to… <span class="caret">▼</span></summary><div><a href="/pos/sale/new/">Make a Sale</a><a href="/pos/order/new/">Create Sales Order</a><a href="/customers/new/">Add Customer</a><a href="/purchasing/po/new/">Create Purchase Order</a><a href="/purchasing/voucher/new/">Receive Items</a><a href="/purchasing/items/new/">Add Item</a><a href="/purchasing/vendors/new/">Add Vendor</a><a href="/purchasing/departments/new/">Add Department</a></div></details>
+<form class="search" action="/find/" method="get"><label for="quick-search">Search</label><select name="area" aria-label="Search in"><option value="customers">Customers</option><option value="items">Items</option><option value="vendors">Vendors</option><option value="receipts">Sales History</option><option value="orders">Sales Orders</option><option value="purchase-orders">Purchase Orders</option></select><input id="quick-search" name="q" maxlength="100" placeholder="Quick Find" aria-label="Quick Find"><button type="submit">Find</button></form>
+</div>
+</header>
+<div class="workspace">
+<aside aria-label="Task shortcuts">
+{% for label in shortcuts %}{% if label == "Customer List" %}<a class="shortcut" href="/customers/">Customer List</a>{% elif label == "Make a Sale" %}<a class="shortcut" href="/pos/sale/new/">Make a Sale</a>{% elif label == "Sales Order" %}<a class="shortcut" href="/pos/order/new/">Sales Order</a>{% elif label == "Receive Items" %}<a class="shortcut" href="/purchasing/voucher/new/">Receive Items</a>{% elif label == "Item List" %}<a class="shortcut" href="/purchasing/items/">Item List</a>{% elif label == "Department List" %}<a class="shortcut" href="/purchasing/departments/">Department List</a>{% elif label == "Notes & Requests" %}<a class="shortcut gold" href="/fixes/"><svg class="shortcut-icon" aria-hidden="true"><use href="#fixes"/></svg>Notes &amp; Requests</a>{% else %}<button class="shortcut" title="{{ label }} — not yet available" disabled>{{ label }}</button>{% endif %}{% endfor %}
+
+</aside>
+<main>
+<h1>Navigator</h1>{% if request.GET.admin == "off" and not admin_mode %}<div class="notice" style="margin:0 0 12px;padding:9px 12px;background:#fff0b3;border:1px solid #b68719;color:#46330b;font-size:13px">That screen is for admins. Sign in as an admin to open it (<strong>Sign In</strong> / <strong>Sign Out</strong> at the top right or in the <strong>File</strong> menu).</div>{% endif %}
+{% if reorder_count %}<div class="reminder-message" role="status">You have inventory reminders: <a href="/purchasing/reorder/">{{ reorder_count }} item{{ reorder_count|pluralize }} at or below reorder point</a></div>{% endif %}
+<section class="navigator" aria-label="Point of Sale">
+<div class="section-label">Point of Sale</div>
+<div class="task-grid">
+{% for task in sales_tasks %}{% include "task.html" %}{% endfor %}
+</div>
+</section>
+<section class="navigator" aria-label="Purchasing">
+<div class="section-label">Purchasing</div>
+<div class="task-grid">
+{% for task in purchasing_tasks %}{% include "task.html" %}{% endfor %}
+</div>
+</section>
+{% if admin_mode %}<section class="navigator" aria-label="Reports">
+<div class="section-label">Reports</div>
+<div class="task-grid">
+{% for task in report_tasks %}{% include "task.html" %}{% endfor %}
+</div>
+</section>{% endif %}
+</main>
+</div>
+<footer class="statusbar">Home <span>Customer List</span></footer>
+</body>
+</html>

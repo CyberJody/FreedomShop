@@ -1,0 +1,57 @@
+{
+  "_comment": "Demo identity with the original 7 % / Exempt / March configuration and exact rounding cases retained for print and tax parity.",
+  "tax": {
+    "charge_tax": true,
+    "default_rate": "7",
+    "default_location": "Springfield",
+    "basis": "cash",
+    "filing_frequency": "quarterly",
+    "tax_year_start_month": 3,
+    "estimate_rule": ""
+  },
+  "locations": [
+    {
+      "name": "Springfield",
+      "rate": "7",
+      "label": "Springfield",
+      "report_label": "Springfield, IL"
+    },
+    {
+      "name": "Exempt",
+      "rate": "0",
+      "is_exempt": true,
+      "label": "Exempt",
+      "report_label": "Exempt"
+    }
+  ],
+  "categories": [
+    {
+      "name": "Taxable Sales",
+      "taxable": true
+    },
+    {
+      "name": "Non",
+      "taxable": false
+    }
+  ],
+  "business": {
+    "name": "Demo Home & Hardware",
+    "legal_name": "Demo Home & Hardware",
+    "short_code": "DEMO",
+    "address_line1": "123 Main St",
+    "city": "Springfield",
+    "region": "IL",
+    "postal_code": "62701",
+    "phone": "555-0100",
+    "fax": "555-0101",
+    "tagline": "HARDWARE FOR HOME AND GARDEN",
+    "receipt_header_lines": "Demo Home & Hardware\n123 Main St\nSpringfield, IL 62701\n555-0100",
+    "receipt_footer": "Thank you for your order!",
+    "return_policy": "Cancellations accepted on order for stock items within 7 days for either Store Credit or a Refund less a 20% re-processing fee ($10 minimum). No Cancellations or Refunds on Custom Built, Custom Finished, Special Order, or Sale items. Unless prior arrangements are made, orders must be picked up within 14 days of notification or they will be sold and your deposit forfeited. $5/day storage charges after 60 days. All claims must be processed by this invoice.",
+    "order_return_policy": "Cancellations accepted on order for stock items within 7 days, for either Store Credit or a Refund less a 20% re-processing charge ($10.00 minimum). No Cancellations or Refunds on Custom Built, Custom Finished, Special Order, or Sale items. Unless prior arrangements are made, orders must be picked up within 14 days of notification or they will be sold and your deposit forfeited. $5/day storage charges after 60 days. All claims must be processed by this invoice.",
+    "order_address_lines": "Demo Home & Hardware\n123 Main St - Springfield, IL 62701\n555-0100",
+    "label_url": "",
+    "receipt_copies": 2,
+    "order_copies_default": 3
+  }
+}

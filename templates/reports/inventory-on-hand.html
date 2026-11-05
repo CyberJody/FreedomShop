@@ -1,0 +1,40 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% load report_tags %}{% block extra_style %}<style>
+.report-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,max-content));gap:14px;align-items:end;padding:12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf}
+.report-options .field select{min-width:240px}.report-options .buttons{display:flex;gap:8px;align-items:center}.report-options .asof{font-size:13px;color:#485365;padding-bottom:8px}
+.export-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px}.export-bar .label{margin-right:4px;color:#485365}.export-bar .summary{margin-left:auto;color:#485365}.export-bar select{padding:6px;min-width:200px;font:inherit;border:1px solid #aeb7c3;border-radius:2px;background:white}.export-bar .print-status{font-size:12px;color:#2f6b3f}.export-bar .print-status.bad{color:#923328}
+.report-table td,.report-table th{white-space:normal}.report-table .group td{background:var(--brand-tint)!important;font-weight:bold;color:var(--brand-green-dark)}.report-table .subtotal td{background:#f3f3f3!important;font-weight:bold;border-top:1px solid #aaa}.report-table .grand td{background:#fff!important;font-weight:bold;font-size:14px;border-top:2px solid var(--brand-green)}.report-table .description{min-width:260px}.report-table td.negative{color:#c00000}.report-table tr.trashed td{color:#6b5a2e;font-style:italic}
+.report-note{padding:8px 12px;font-size:12px;color:#485365;background:#fff;border-top:1px solid #ccc;line-height:1.6}
+.report-heading{display:none}
+@media print{.report-heading{display:block;padding:8px 10px;font-size:13px}.export-bar,.report-options{display:none!important}}
+</style>{% endblock %}{% block task_shortcuts %}<a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/purchasing/items/">Item List</a><a class="shortcut" href="/purchasing/voucher/new/">Receive Items</a><a class="shortcut" href="/">Home</a>{% endblock %}{% block content %}
+<form method="get" class="report-options">
+<label class="field">Items<select name="zero"><option value="stock" {% if not include_zero %}selected{% endif %}>With stock on hand</option><option value="all" {% if include_zero %}selected{% endif %}>All inventory items (include zero on hand)</option></select></label>
+<div class="asof">As of today, {{ today|date:'n/j/Y' }} — current quantities</div>
+<div class="buttons"><button class="button primary" name="run" value="1">Display Report</button><a class="button" href="/reports/inventory-on-hand/">Reset</a></div>
+</form>
+{% if report %}
+<div class="export-bar" id="export-bar" data-print-url="/reports/inventory-on-hand/print/"><span class="label">Save as</span><a class="button" href="?{{ params }}&amp;format=xlsx">Excel</a><a class="button" href="?{{ params }}&amp;format=pdf">PDF</a><button class="button" type="button" id="direct-print" {% if not printers %}disabled title="No Letter printers are set up"{% endif %}>Direct Print</button><select id="report-printer" aria-label="Printer" {% if not printers %}disabled{% endif %}>{% for p in printers %}<option value="{{ p.pk }}" {% if selected_printer == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No Letter printers</option>{% endfor %}</select><span class="print-status" id="print-status" role="status" hidden></span><span class="summary">{{ report.subtitle }} · {{ report.items }} item{{ report.items|pluralize }} · {{ report.on_hand|qty }} units · {{ report.value|dollars }}</span></div>
+<form id="print-options" hidden>{% csrf_token %}<input type="hidden" name="zero" value="{% if include_zero %}all{% else %}stock{% endif %}"></form>
+<div class="report-heading"><strong>{{ business.name }} — {{ report.title }}</strong><br>{{ report.subtitle }} · as of {{ today|date:'n/j/Y' }}</div>
+<div class="table-scroll"><table class="report-table"><thead><tr><th>Item #</th><th>Item Name</th><th>Description</th><th>Vendor</th><th class="number">On Hand</th><th class="number">Avg Cost</th><th class="number">Ext Cost</th></tr></thead><tbody>
+{% for g in report.groups %}<tr class="group"><td colspan="7">{{ g.department }}</td></tr>
+{% for r in g.rows %}<tr{% if r.trashed %} class="trashed"{% endif %}><td>{{ r.sku }}</td><td>{{ r.name }}</td><td class="description">{{ r.description }}</td><td>{{ r.vendor }}</td><td class="number{% if r.on_hand < 0 %} negative{% endif %}">{{ r.on_hand|qty }}</td><td class="number">{{ r.cost|dollars }}</td><td class="number{% if r.value < 0 %} negative{% endif %}">{{ r.value|dollars }}</td></tr>{% endfor %}
+<tr class="subtotal"><td colspan="4">Total {{ g.department }} · {{ g.items }} item{{ g.items|pluralize }}</td><td class="number">{{ g.on_hand|qty }}</td><td></td><td class="number">{{ g.value|dollars }}</td></tr>
+{% endfor %}
+<tr class="grand"><td colspan="4">Grand total · {{ report.items }} item{{ report.items|pluralize }}</td><td class="number">{{ report.on_hand|qty }}</td><td></td><td class="number">{{ report.value|dollars }}</td></tr>
+</tbody></table>
+<div class="report-note">Inventory items only, current quantities as of {{ today|date:'n/j/Y' }}. Ext Cost = On Hand × Avg Cost in whole cents.{% if report.negative_items %}<br><span style="color:#c00000">{{ report.negative_items }} item{{ report.negative_items|pluralize }}</span> show a negative on-hand quantity (sold beyond recorded stock); they reduce the total.{% endif %}{% if report.skipped_zero %}<br>{{ report.skipped_zero }} item{{ report.skipped_zero|pluralize }} with zero on hand not shown.{% endif %}{% if report.trashed_items %}<br>{{ report.trashed_items }} item{{ report.trashed_items|pluralize }} marked <em>(in Items Trash)</em> hold stock received or returned while in the Items Trash; they count in the total.{% endif %}</div>
+{% if not report.groups %}<div class="empty"><strong>No inventory items</strong></div>{% endif %}</div>
+{% elif not ran %}
+<div class="empty"><strong>Inventory On Hand</strong>Every inventory item's current on-hand quantity, average cost and extended cost, grouped by department. Choose whether to include items with nothing on hand, then Display Report.</div>
+{% endif %}
+{% endblock %}{% block scripts %}{% if report %}<script>
+(()=>{const bar=document.getElementById('export-bar'),button=document.getElementById('direct-print'),select=document.getElementById('report-printer'),status=document.getElementById('print-status'),form=document.getElementById('print-options');
+if(!button||button.disabled)return;const show=(text,bad)=>{status.textContent=text;status.hidden=false;status.classList.toggle('bad',!!bad);};
+button.addEventListener('click',async()=>{const body=new URLSearchParams(new FormData(form));body.set('printer',select.value);button.disabled=true;show('Sending to '+select.options[select.selectedIndex].text+'…');
+ try{const r=await fetch(bar.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrfmiddlewaretoken]').value},body});
+  const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);}
+ catch{show('Could not reach the app server. Check the connection before retrying.',true);}
+ finally{button.disabled=false;}});})();
+</script>{% endif %}{% endblock %}

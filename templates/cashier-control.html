@@ -1,0 +1,76 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% if request.user.is_authenticated %}{% if active_cashier.admin %}
+<span id="cashier-admin" class="menu-link" title="Admins are the cashier automatically — no PIN needed.">Cashier: <span id="cashier-name">{{ active_cashier.name }}</span></span>
+{% elif register_login %}
+<button type="button" id="cashier-control" class="menu-link" style="font:inherit;cursor:pointer" aria-haspopup="dialog">Cashier: <span id="cashier-name">{{ active_cashier.name|default:'No cashier' }}</span></button>
+<dialog id="cashier-dialog" aria-labelledby="cashier-title" style="padding:24px;border:2px solid #1b4b34;border-radius:6px;color:#222">
+  <form id="cashier-form" action="/cashier/" method="post" autocomplete="off">
+    {% csrf_token %}
+    <h2 id="cashier-title">Who is ringing?</h2>
+    <label for="cashier-user">Name</label>
+    <select id="cashier-user" name="cashier" required style="display:block;font:inherit;font-size:20px;min-width:14ch;margin:8px 0 14px;padding:4px 6px">
+      <option value="">Choose…</option>
+      {% for person in pin_cashiers %}<option value="{{ person.pk }}"{% if active_cashier.pk == person.pk %} selected{% endif %}>{{ person.name }}</option>{% endfor %}
+    </select>
+    <label for="cashier-pin">4-digit PIN</label>
+    <input id="cashier-pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required style="display:block;font-size:24px;width:9ch;margin:8px 0 12px">
+    <p id="cashier-error" role="alert" style="color:#a30000"></p>
+    <div class="cashier-buttons" style="display:flex;gap:10px;align-items:center;margin-top:6px">
+      <button type="submit" class="cashier-btn cashier-primary" style="font:inherit;font-weight:bold;padding:8px 18px;border:1px solid #133725;border-radius:4px;background:#1b4b34;color:#fff;cursor:pointer">Sign in</button>
+      <button type="button" id="cashier-clear" class="cashier-btn" style="font:inherit;padding:8px 14px;border:1px solid #b8cec0;border-radius:4px;background:linear-gradient(#fff,#e7f0e9);color:#171717;cursor:pointer"{% if not active_cashier %} hidden{% endif %}>Sign out <span id="cashier-clear-name">{{ active_cashier.name }}</span></button>
+      <button type="button" id="cashier-cancel" class="cashier-btn" style="font:inherit;padding:8px 14px;border:1px solid #b8cec0;border-radius:4px;background:linear-gradient(#fff,#e7f0e9);color:#171717;cursor:pointer">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(() => {
+  const dialog = document.getElementById('cashier-dialog'), form = document.getElementById('cashier-form');
+  const who = document.getElementById('cashier-user'), pin = document.getElementById('cashier-pin'), error = document.getElementById('cashier-error');
+  const openPin = () => { pin.value = ''; error.textContent = ''; dialog.showModal(); (who.value ? pin : who).focus(); };
+  document.getElementById('cashier-control').addEventListener('click', openPin);
+  // The title-bar "No cashier" button is rendered after this script, so listen on the document.
+  document.addEventListener('click', e => { if (e.target.closest('#ringing-name')) openPin(); });  // the name too: click it to switch cashier
+  who.addEventListener('change', () => { pin.value = ''; error.textContent = ''; pin.focus(); });
+  document.getElementById('cashier-cancel').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => { pin.value = ''; });
+  let pending = false;
+  async function submit(clear) {
+    if (pending) return;
+    if (!clear && !who.value) { error.textContent = 'Choose your name from the list.'; who.focus(); return; }
+    pending = true; error.textContent = '';
+    const data = new FormData(form);
+    if (clear) { data.delete('pin'); data.delete('cashier'); data.set('action', 'clear'); }
+    pin.value = '';
+    try {
+      const response = await fetch(form.action, {method: 'POST', body: data, credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+      const result = await response.json();
+      if (!response.ok) { error.textContent = result.error || 'Unable to change cashier.'; pin.focus(); return; }
+      document.getElementById('cashier-name').textContent = result.cashier;
+      const clearBtn = document.getElementById('cashier-clear');
+      clearBtn.hidden = clear; document.getElementById('cashier-clear-name').textContent = clear ? '' : result.cashier;
+      if (clear) who.value = '';
+      showRinging(clear ? '' : result.cashier);
+      dialog.close();
+    } catch (_) { error.textContent = 'Unable to change cashier. Please try again.'; pin.focus(); }
+    finally { pending = false; }
+  }
+  form.addEventListener('submit', event => { event.preventDefault(); submit(false); });
+  document.getElementById('cashier-clear').addEventListener('click', () => submit(true));
+  // Title-bar "Sign out" next to the name — same clear action, without opening the dialog.
+  document.addEventListener('click', e => { if (e.target.closest('#ringing-signout')) submit(true); });
+  // Keep the title bar in step: the name + Sign out while a cashier is active, else the "No cashier" button.
+  function showRinging(name) {
+    const slot = document.getElementById('ringing-slot'); if (!slot) return;
+    const el = (tag, attrs, text) => { const n = document.createElement(tag); for (const k in attrs) n.setAttribute(k, attrs[k]); n.textContent = text; return n; };
+    slot.replaceChildren();
+    if (name) {
+      slot.append(el('button', {type: 'button', 'class': 'ringing ringing-active', id: 'ringing-name', title: 'Click to switch who is ringing', 'aria-haspopup': 'dialog'}, name),
+                  el('button', {type: 'button', 'class': 'ringing-signout', id: 'ringing-signout', title: 'Sign out this cashier'}, 'Sign out'));
+    } else {
+      slot.append(el('button', {type: 'button', 'class': 'ringing ringing-none', id: 'ringing-name', title: 'Click to choose who is ringing', 'aria-haspopup': 'dialog'}, 'No cashier — click to choose'));
+    }
+  }
+
+})();
+</script>
+{% endif %}{% endif %}

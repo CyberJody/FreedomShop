@@ -1,0 +1,19 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>About · FreedomShop · Point of Sale</title>{% include "styles.html" %}<style>body{background:#e7f0e9}.about-card{margin:40px auto;padding:30px;background:white;border:1px solid #b8cec0;border-radius:8px;width:min(720px,94%);box-shadow:0 4px 18px #0001;line-height:1.5;color:#26352c}.about-card h1{font-size:26px;margin:0}.about-card h1 span{font-size:16px;font-weight:normal;color:#46594d}.about-facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:18px 0}.about-facts dt{font-weight:bold}.about-facts dd{margin:0}.help-boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:22px}.help-box{border:1px solid #b8cec0;border-radius:6px;padding:14px 18px;background:#f6faf7}.help-box.paid{background:#fbf8ef;border-color:#d8c99a}.help-box h2{font-size:17px;margin:0 0 8px}.help-box ul{margin:0;padding-left:20px}.about-back{display:inline-block;margin-top:22px}</style></head><body><div class="titlebar"><span class="brand"><span class="product-name">FreedomShop <span class="product-subtitle">Point of Sale</span></span>{% if business.name %}<span class="business-name">{{ business.name }}</span>{% endif %}</span></div>
+<main class="about-card">
+<h1>FreedomShop <span>Point of Sale</span></h1>
+<p>A browser-based point of sale and inventory application for independent shops, run on your own server.</p>
+<dl class="about-facts">
+<dt>Version</dt><dd id="about-version">{{ version }}</dd>
+<dt>License</dt><dd>GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). <a href="/about/license/">Read the license text</a>. You may use, study, share and change this software under its terms; if you change it and offer it to others over a network, you must offer them your source code too.</dd>
+<dt>Credits</dt><dd>Created by Jody Grafals / TechQuest</dd>
+<dt>Website</dt><dd><a href="https://freedomshop.app">freedomshop.app</a></dd>
+<dt>Source code</dt><dd><a href="https://github.com/CyberJody/FreedomShop">github.com/CyberJody/FreedomShop</a></dd>
+<dt>TechQuest</dt><dd><a href="https://techquest.guru">techquest.guru</a></dd>
+</dl>
+<div class="help-boxes">
+<section class="help-box free" aria-labelledby="free-help"><h2 id="free-help">Free help</h2><p>FreedomShop is free software. Install and run it yourself, and ask the community:</p><ul><li><a href="https://github.com/CyberJody/FreedomShop/issues">GitHub Issues</a> — report a problem or request a feature</li><li><a href="https://github.com/CyberJody/FreedomShop/discussions">GitHub Discussions</a> — questions and ideas</li><li><a href="https://github.com/CyberJody/FreedomShop#readme">Documentation</a> — install guide, user guide and changelog</li></ul></section>
+<section class="help-box paid" aria-labelledby="paid-help"><h2 id="paid-help">Paid help from TechQuest</h2><p>If you would rather not do it yourself, <a href="https://techquest.guru">TechQuest</a> offers:</p><ul><li>Support for your installation</li><li>Deployments: setup on your server, printers and registers</li><li>Add-ons and custom changes</li></ul><p>Paid help is optional. FreedomShop works the same without it.</p></section>
+</div>
+<a class="about-back" href="/">← Back to FreedomShop</a>
+</main></body></html>

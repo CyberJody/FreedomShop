@@ -1,0 +1,2790 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:freedomshop:exchange:1",
+  "title": "FreedomShop daily exchange, version 1 final",
+  "description": "Local proposals with Rust-shaped values. IDs require destination-book binding. No posting is authorized by this format.",
+  "type": "object",
+  "properties": {
+    "body": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "const": "freedomshop-exchange/1"
+        },
+        "shop": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "name": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "time_zone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "currency",
+            "time_zone"
+          ],
+          "additionalProperties": false
+        },
+        "day": {
+          "$ref": "#/$defs/date"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "app": {
+              "const": "freedomshop"
+            },
+            "version": {
+              "const": "1"
+            },
+            "basis": {
+              "const": "cash"
+            }
+          },
+          "required": [
+            "app",
+            "version",
+            "basis"
+          ],
+          "additionalProperties": false
+        },
+        "summary": {
+          "type": "object",
+          "properties": {
+            "gross_sales": {
+              "$ref": "#/$defs/money"
+            },
+            "discounts": {
+              "$ref": "#/$defs/money"
+            },
+            "returns": {
+              "$ref": "#/$defs/money"
+            },
+            "taxable": {
+              "$ref": "#/$defs/money"
+            },
+            "nontaxable": {
+              "$ref": "#/$defs/money"
+            },
+            "received": {
+              "$ref": "#/$defs/money"
+            },
+            "total": {
+              "$ref": "#/$defs/money"
+            },
+            "tender_total": {
+              "$ref": "#/$defs/money"
+            },
+            "unlinked_deposits": {
+              "$ref": "#/$defs/money"
+            },
+            "order_deposits_taken": {
+              "$ref": "#/$defs/money"
+            },
+            "order_deposits_applied": {
+              "$ref": "#/$defs/money"
+            },
+            "legacy_deposits_excluded": {
+              "$ref": "#/$defs/money"
+            },
+            "payments_on_account": {
+              "$ref": "#/$defs/money"
+            },
+            "gift_certificates_sold": {
+              "$ref": "#/$defs/money"
+            },
+            "gift_certificates_redeemed": {
+              "$ref": "#/$defs/money"
+            },
+            "other_tenders": {
+              "$ref": "#/$defs/money"
+            },
+            "restocking_fees": {
+              "$ref": "#/$defs/money"
+            },
+            "cogs": {
+              "$ref": "#/$defs/money"
+            },
+            "inventory_received_at_cost": {
+              "$ref": "#/$defs/money"
+            },
+            "tax_collected": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/money"
+              }
+            },
+            "by_tax_location": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/figures"
+              }
+            },
+            "tenders": {
+              "type": "object",
+              "properties": {
+                "cash": {
+                  "$ref": "#/$defs/money"
+                },
+                "check": {
+                  "$ref": "#/$defs/money"
+                },
+                "card": {
+                  "$ref": "#/$defs/money"
+                },
+                "account": {
+                  "$ref": "#/$defs/money"
+                },
+                "gift": {
+                  "$ref": "#/$defs/money"
+                }
+              },
+              "required": [
+                "cash",
+                "check",
+                "card",
+                "account",
+                "gift"
+              ],
+              "additionalProperties": false
+            },
+            "missing_cost_lines": {
+              "type": "integer"
+            },
+            "daily_totals": {
+              "type": "object",
+              "properties": {
+                "received": {
+                  "$ref": "#/$defs/money"
+                },
+                "new_sale": {
+                  "$ref": "#/$defs/money"
+                },
+                "balance": {
+                  "$ref": "#/$defs/money"
+                },
+                "tax": {
+                  "$ref": "#/$defs/money"
+                },
+                "cash": {
+                  "$ref": "#/$defs/money"
+                },
+                "check": {
+                  "$ref": "#/$defs/money"
+                },
+                "card": {
+                  "$ref": "#/$defs/money"
+                },
+                "account": {
+                  "$ref": "#/$defs/money"
+                },
+                "gift": {
+                  "$ref": "#/$defs/money"
+                },
+                "exempt": {
+                  "$ref": "#/$defs/money"
+                }
+              },
+              "required": [
+                "received",
+                "new_sale",
+                "balance",
+                "tax",
+                "cash",
+                "check",
+                "card",
+                "account",
+                "gift",
+                "exempt"
+              ],
+              "additionalProperties": false
+            },
+            "daily_sales_summary": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/money"
+              }
+            }
+          },
+          "required": [
+            "gross_sales",
+            "discounts",
+            "returns",
+            "taxable",
+            "nontaxable",
+            "received",
+            "total",
+            "tender_total",
+            "unlinked_deposits",
+            "order_deposits_taken",
+            "order_deposits_applied",
+            "legacy_deposits_excluded",
+            "payments_on_account",
+            "gift_certificates_sold",
+            "gift_certificates_redeemed",
+            "other_tenders",
+            "restocking_fees",
+            "cogs",
+            "inventory_received_at_cost",
+            "tax_collected",
+            "by_tax_location",
+            "tenders",
+            "missing_cost_lines",
+            "daily_totals",
+            "daily_sales_summary"
+          ],
+          "additionalProperties": false
+        },
+        "directory": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "summary"
+            },
+            "customers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SaveDirectoryRecord"
+              }
+            },
+            "vendors": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SaveDirectoryRecord"
+              }
+            }
+          },
+          "required": [
+            "mode",
+            "customers",
+            "vendors"
+          ],
+          "additionalProperties": false
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ReviewCustomerReceipt"
+              },
+              {
+                "$ref": "#/$defs/ReviewDeposit"
+              },
+              {
+                "$ref": "#/$defs/ReviewCustomerDeposit"
+              },
+              {
+                "$ref": "#/$defs/ReviewCreditMemo"
+              },
+              {
+                "$ref": "#/$defs/ReviewCustomerRefund"
+              },
+              {
+                "$ref": "#/$defs/ReviewDepositApplication"
+              },
+              {
+                "$ref": "#/$defs/SaveBill"
+              },
+              {
+                "$ref": "#/$defs/SaveJournal"
+              },
+              {
+                "$ref": "#/$defs/SaveDirectoryRecord"
+              },
+              {
+                "$ref": "#/$defs/ReverseCustomerReceipt"
+              },
+              {
+                "$ref": "#/$defs/VoidCustomerDeposit"
+              },
+              {
+                "$ref": "#/$defs/ReverseDeposit"
+              },
+              {
+                "$ref": "#/$defs/VoidCreditMemo"
+              },
+              {
+                "$ref": "#/$defs/VoidCustomerRefund"
+              },
+              {
+                "$ref": "#/$defs/UnapplyDeposit"
+              },
+              {
+                "$ref": "#/$defs/ReverseJournal"
+              },
+              {
+                "$ref": "#/$defs/VoidBill"
+              }
+            ]
+          }
+        },
+        "references": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "key",
+              "label"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "ledger": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fs_source": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "sale",
+                  "order",
+                  "account"
+                ]
+              },
+              "gross": {
+                "$ref": "#/$defs/money"
+              },
+              "discount": {
+                "$ref": "#/$defs/money"
+              },
+              "taxable": {
+                "$ref": "#/$defs/money"
+              },
+              "nontaxable": {
+                "$ref": "#/$defs/money"
+              },
+              "tax": {
+                "$ref": "#/$defs/money"
+              },
+              "total": {
+                "$ref": "#/$defs/money"
+              }
+            },
+            "required": [
+              "fs_source",
+              "location",
+              "kind",
+              "gross",
+              "discount",
+              "taxable",
+              "nontaxable",
+              "tax",
+              "total"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "checks": {
+          "type": "object",
+          "properties": {
+            "tenders_equal_total": {
+              "type": "boolean"
+            },
+            "ledger_ties_daily_totals": {
+              "type": "boolean"
+            },
+            "ledger_ties_sales_tax": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "tenders_equal_total",
+            "ledger_ties_daily_totals",
+            "ledger_ties_sales_tax"
+          ],
+          "additionalProperties": false
+        },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "excluded": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "estimated_payments": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "estimated_total": {
+              "$ref": "#/$defs/money"
+            },
+            "estimated_tax": {
+              "$ref": "#/$defs/money"
+            },
+            "tax_adjustments": {
+              "$ref": "#/$defs/money"
+            }
+          },
+          "required": [
+            "excluded",
+            "estimated_payments",
+            "estimated_total",
+            "estimated_tax",
+            "tax_adjustments"
+          ],
+          "additionalProperties": false
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "day_summary": {
+          "type": "object",
+          "properties": {
+            "gross_sales": {
+              "$ref": "#/$defs/money"
+            },
+            "discounts": {
+              "$ref": "#/$defs/money"
+            },
+            "returns": {
+              "$ref": "#/$defs/money"
+            },
+            "taxable": {
+              "$ref": "#/$defs/money"
+            },
+            "nontaxable": {
+              "$ref": "#/$defs/money"
+            },
+            "received": {
+              "$ref": "#/$defs/money"
+            },
+            "total": {
+              "$ref": "#/$defs/money"
+            },
+            "tender_total": {
+              "$ref": "#/$defs/money"
+            },
+            "unlinked_deposits": {
+              "$ref": "#/$defs/money"
+            },
+            "order_deposits_taken": {
+              "$ref": "#/$defs/money"
+            },
+            "order_deposits_applied": {
+              "$ref": "#/$defs/money"
+            },
+            "legacy_deposits_excluded": {
+              "$ref": "#/$defs/money"
+            },
+            "payments_on_account": {
+              "$ref": "#/$defs/money"
+            },
+            "gift_certificates_sold": {
+              "$ref": "#/$defs/money"
+            },
+            "gift_certificates_redeemed": {
+              "$ref": "#/$defs/money"
+            },
+            "other_tenders": {
+              "$ref": "#/$defs/money"
+            },
+            "restocking_fees": {
+              "$ref": "#/$defs/money"
+            },
+            "cogs": {
+              "$ref": "#/$defs/money"
+            },
+            "inventory_received_at_cost": {
+              "$ref": "#/$defs/money"
+            },
+            "tax_collected": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/money"
+              }
+            },
+            "by_tax_location": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/figures"
+              }
+            },
+            "tenders": {
+              "type": "object",
+              "properties": {
+                "cash": {
+                  "$ref": "#/$defs/money"
+                },
+                "check": {
+                  "$ref": "#/$defs/money"
+                },
+                "card": {
+                  "$ref": "#/$defs/money"
+                },
+                "account": {
+                  "$ref": "#/$defs/money"
+                },
+                "gift": {
+                  "$ref": "#/$defs/money"
+                }
+              },
+              "required": [
+                "cash",
+                "check",
+                "card",
+                "account",
+                "gift"
+              ],
+              "additionalProperties": false
+            },
+            "missing_cost_lines": {
+              "type": "integer"
+            },
+            "daily_totals": {
+              "type": "object",
+              "properties": {
+                "received": {
+                  "$ref": "#/$defs/money"
+                },
+                "new_sale": {
+                  "$ref": "#/$defs/money"
+                },
+                "balance": {
+                  "$ref": "#/$defs/money"
+                },
+                "tax": {
+                  "$ref": "#/$defs/money"
+                },
+                "cash": {
+                  "$ref": "#/$defs/money"
+                },
+                "check": {
+                  "$ref": "#/$defs/money"
+                },
+                "card": {
+                  "$ref": "#/$defs/money"
+                },
+                "account": {
+                  "$ref": "#/$defs/money"
+                },
+                "gift": {
+                  "$ref": "#/$defs/money"
+                },
+                "exempt": {
+                  "$ref": "#/$defs/money"
+                }
+              },
+              "required": [
+                "received",
+                "new_sale",
+                "balance",
+                "tax",
+                "cash",
+                "check",
+                "card",
+                "account",
+                "gift",
+                "exempt"
+              ],
+              "additionalProperties": false
+            },
+            "daily_sales_summary": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/money"
+              }
+            }
+          },
+          "required": [
+            "gross_sales",
+            "discounts",
+            "returns",
+            "taxable",
+            "nontaxable",
+            "received",
+            "total",
+            "tender_total",
+            "unlinked_deposits",
+            "order_deposits_taken",
+            "order_deposits_applied",
+            "legacy_deposits_excluded",
+            "payments_on_account",
+            "gift_certificates_sold",
+            "gift_certificates_redeemed",
+            "other_tenders",
+            "restocking_fees",
+            "cogs",
+            "inventory_received_at_cost",
+            "tax_collected",
+            "by_tax_location",
+            "tenders",
+            "missing_cost_lines",
+            "daily_totals",
+            "daily_sales_summary"
+          ],
+          "additionalProperties": false
+        },
+        "corrections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_day": {
+                "$ref": "#/$defs/date"
+              },
+              "source": {
+                "type": "string"
+              },
+              "source_file_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "summary_delta": {
+                "type": "object",
+                "properties": {
+                  "gross_sales": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "discounts": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "returns": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "taxable": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "nontaxable": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "received": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "total": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "tender_total": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "unlinked_deposits": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "order_deposits_taken": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "order_deposits_applied": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "legacy_deposits_excluded": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "payments_on_account": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "gift_certificates_sold": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "gift_certificates_redeemed": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "other_tenders": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "restocking_fees": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "cogs": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "inventory_received_at_cost": {
+                    "$ref": "#/$defs/money"
+                  },
+                  "tax_collected": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/$defs/money"
+                    }
+                  },
+                  "by_tax_location": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/$defs/figures"
+                    }
+                  },
+                  "tenders": {
+                    "type": "object",
+                    "properties": {
+                      "cash": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "check": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "card": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "account": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "gift": {
+                        "$ref": "#/$defs/money"
+                      }
+                    },
+                    "required": [
+                      "cash",
+                      "check",
+                      "card",
+                      "account",
+                      "gift"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "missing_cost_lines": {
+                    "type": "integer"
+                  },
+                  "daily_totals": {
+                    "type": "object",
+                    "properties": {
+                      "received": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "new_sale": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "balance": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "tax": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "cash": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "check": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "card": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "account": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "gift": {
+                        "$ref": "#/$defs/money"
+                      },
+                      "exempt": {
+                        "$ref": "#/$defs/money"
+                      }
+                    },
+                    "required": [
+                      "received",
+                      "new_sale",
+                      "balance",
+                      "tax",
+                      "cash",
+                      "check",
+                      "card",
+                      "account",
+                      "gift",
+                      "exempt"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "daily_sales_summary": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/$defs/money"
+                    }
+                  }
+                },
+                "required": [
+                  "gross_sales",
+                  "discounts",
+                  "returns",
+                  "taxable",
+                  "nontaxable",
+                  "received",
+                  "total",
+                  "tender_total",
+                  "unlinked_deposits",
+                  "order_deposits_taken",
+                  "order_deposits_applied",
+                  "legacy_deposits_excluded",
+                  "payments_on_account",
+                  "gift_certificates_sold",
+                  "gift_certificates_redeemed",
+                  "other_tenders",
+                  "restocking_fees",
+                  "cogs",
+                  "inventory_received_at_cost",
+                  "tax_collected",
+                  "by_tax_location",
+                  "tenders",
+                  "missing_cost_lines",
+                  "daily_totals",
+                  "daily_sales_summary"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "source_day",
+              "source",
+              "source_file_sha256",
+              "summary_delta"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "format",
+        "shop",
+        "day",
+        "source",
+        "summary",
+        "directory",
+        "commands",
+        "references",
+        "ledger",
+        "checks",
+        "diagnostics",
+        "requires",
+        "day_summary",
+        "corrections"
+      ],
+      "additionalProperties": false
+    },
+    "body_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "body",
+    "body_sha256",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "money": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "figures": {
+      "type": "object",
+      "properties": {
+        "gross": {
+          "$ref": "#/$defs/money"
+        },
+        "discount": {
+          "$ref": "#/$defs/money"
+        },
+        "taxable": {
+          "$ref": "#/$defs/money"
+        },
+        "nontaxable": {
+          "$ref": "#/$defs/money"
+        },
+        "tax": {
+          "$ref": "#/$defs/money"
+        },
+        "total": {
+          "$ref": "#/$defs/money"
+        }
+      },
+      "required": [
+        "gross",
+        "discount",
+        "taxable",
+        "nontaxable",
+        "tax",
+        "total"
+      ],
+      "additionalProperties": false
+    },
+    "invoiceLine": {
+      "type": "object",
+      "properties": {
+        "origin_position": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "item_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "rate": {
+          "$ref": "#/$defs/money"
+        },
+        "taxable": {
+          "type": "boolean"
+        },
+        "refresh_item": {
+          "type": "boolean"
+        },
+        "keep_archived": {
+          "type": "boolean"
+        },
+        "income_account_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "origin_position",
+        "item_id",
+        "description",
+        "quantity",
+        "rate",
+        "taxable",
+        "refresh_item",
+        "keep_archived",
+        "income_account_id"
+      ],
+      "additionalProperties": false
+    },
+    "allocation": {
+      "type": "object",
+      "properties": {
+        "invoice_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "amount": {
+          "$ref": "#/$defs/money"
+        }
+      },
+      "required": [
+        "invoice_id",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "billLine": {
+      "type": "object",
+      "properties": {
+        "origin_position": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "item_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expense_account_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "rate": {
+          "$ref": "#/$defs/money"
+        },
+        "refresh_item": {
+          "type": "boolean"
+        },
+        "keep_archived": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "origin_position",
+        "item_id",
+        "expense_account_id",
+        "description",
+        "quantity",
+        "rate",
+        "refresh_item",
+        "keep_archived"
+      ],
+      "additionalProperties": false
+    },
+    "journalLine": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/$defs/uuid"
+        },
+        "debit": {
+          "$ref": "#/$defs/money"
+        },
+        "credit": {
+          "$ref": "#/$defs/money"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account",
+        "debit",
+        "credit",
+        "description",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCustomerReceiptValues": {
+      "type": "object",
+      "properties": {
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "customer_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "method": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        },
+        "destination": {
+          "const": "UNDEPOSITED"
+        },
+        "bank_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "amount": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_mode": {
+          "enum": [
+            "ITEM",
+            "NONE",
+            null
+          ]
+        },
+        "tax_item_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/invoiceLine"
+          }
+        },
+        "allocations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/allocation"
+          }
+        }
+      },
+      "required": [
+        "request_key",
+        "customer_id",
+        "date",
+        "method",
+        "reference",
+        "memo",
+        "destination",
+        "bank_id",
+        "amount",
+        "tax_mode",
+        "tax_item_id",
+        "lines",
+        "allocations"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewDepositValues": {
+      "type": "object",
+      "properties": {
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "bank_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        },
+        "receipt_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        }
+      },
+      "required": [
+        "request_key",
+        "bank_id",
+        "date",
+        "reference",
+        "memo",
+        "receipt_ids"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCustomerDepositValues": {
+      "type": "object",
+      "properties": {
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "customer_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "amount": {
+          "$ref": "#/$defs/money"
+        },
+        "method": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "destination": {
+          "const": "UNDEPOSITED"
+        },
+        "bank_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimate_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "order_reference": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_key",
+        "customer_id",
+        "date",
+        "amount",
+        "method",
+        "reference",
+        "destination",
+        "bank_id",
+        "estimate_id",
+        "order_reference",
+        "memo"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCreditMemoValues": {
+      "type": "object",
+      "properties": {
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "customer_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "memo": {
+          "type": "string"
+        },
+        "tax_mode": {
+          "enum": [
+            "ITEM",
+            "NONE"
+          ]
+        },
+        "tax_item_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/invoiceLine"
+          }
+        }
+      },
+      "required": [
+        "request_key",
+        "customer_id",
+        "date",
+        "memo",
+        "tax_mode",
+        "tax_item_id",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCustomerRefundValues": {
+      "type": "object",
+      "properties": {
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "amount": {
+          "$ref": "#/$defs/money"
+        },
+        "bank_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "method": {
+          "type": "string"
+        },
+        "check_number": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_key",
+        "date",
+        "amount",
+        "bank_id",
+        "method",
+        "check_number",
+        "memo"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewDepositApplicationValues": {
+      "type": "object",
+      "properties": {
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "amount": {
+          "$ref": "#/$defs/money"
+        },
+        "invoice_id": {
+          "$ref": "#/$defs/uuid"
+        }
+      },
+      "required": [
+        "request_key",
+        "date",
+        "amount",
+        "invoice_id"
+      ],
+      "additionalProperties": false
+    },
+    "SaveBillValues": {
+      "type": "object",
+      "properties": {
+        "bill_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "vendor_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "due_date": {
+          "$ref": "#/$defs/date"
+        },
+        "memo": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "supersedes_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reentry_reason": {
+          "type": "string"
+        },
+        "refresh_vendor": {
+          "type": "boolean"
+        },
+        "keep_archived": {
+          "type": "boolean"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/billLine"
+          }
+        }
+      },
+      "required": [
+        "bill_id",
+        "expected_revision",
+        "request_key",
+        "vendor_id",
+        "date",
+        "due_date",
+        "memo",
+        "reference",
+        "supersedes_id",
+        "reentry_reason",
+        "refresh_vendor",
+        "keep_archived",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "SaveJournalValues": {
+      "type": "object",
+      "properties": {
+        "journal_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "memo": {
+          "type": "string"
+        },
+        "entry_number": {
+          "type": "string"
+        },
+        "adjusting": {
+          "type": "boolean"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expected_revision": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/journalLine"
+          }
+        }
+      },
+      "required": [
+        "journal_id",
+        "date",
+        "memo",
+        "entry_number",
+        "adjusting",
+        "request_key",
+        "expected_revision",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "SaveDirectoryRecordValues": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "customer"
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "business_name": {
+              "type": "string"
+            },
+            "contact_name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "billing_address": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "tax_status": {
+              "enum": [
+                "TAXABLE",
+                "EXEMPT"
+              ]
+            },
+            "exemption_number": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "display_name",
+            "business_name",
+            "contact_name",
+            "email",
+            "phone",
+            "billing_address",
+            "notes",
+            "tax_status",
+            "exemption_number"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "vendor"
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "business_name": {
+              "type": "string"
+            },
+            "contact_name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "billing_address": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "default_expense_account": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default_terms": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expense_shown": {
+              "type": "boolean"
+            },
+            "terms_shown": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "display_name",
+            "business_name",
+            "contact_name",
+            "email",
+            "phone",
+            "billing_address",
+            "notes",
+            "default_expense_account",
+            "default_terms",
+            "expense_shown",
+            "terms_shown"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "item"
+            },
+            "code": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "item_kind": {
+              "const": "NONSTOCK"
+            },
+            "sale_rate": {
+              "$ref": "#/$defs/money"
+            },
+            "purchase_cost": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/money"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "income_account": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expense_account": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "taxable": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "code",
+            "description",
+            "item_kind",
+            "sale_rate",
+            "purchase_cost",
+            "income_account",
+            "expense_account",
+            "taxable"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ReviewCustomerReceipt": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReviewCustomerReceipt"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/ReviewCustomerReceiptValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "RecordCustomerReceipt"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sales_receipt": {
+          "type": "boolean"
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "sales_receipt"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewDeposit": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReviewDeposit"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/ReviewDepositValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "RecordDeposit"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCustomerDeposit": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReviewCustomerDeposit"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/ReviewCustomerDepositValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "RecordCustomerDeposit"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCreditMemo": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReviewCreditMemo"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/ReviewCreditMemoValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "RecordCreditMemo"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewCustomerRefund": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReviewCustomerRefund"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/ReviewCustomerRefundValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "RecordCustomerRefund"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "deposit": {
+          "type": "boolean"
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "source_id",
+        "deposit"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewDepositApplication": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReviewDepositApplication"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/ReviewDepositApplicationValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "RecordDepositApplication"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "source_id"
+      ],
+      "additionalProperties": false
+    },
+    "SaveBill": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "SaveBill"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/SaveBillValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "ReviewBill",
+            "PostBill"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types"
+      ],
+      "additionalProperties": false
+    },
+    "SaveJournal": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "SaveJournal"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/SaveJournalValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": [
+            "PostJournal"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types"
+      ],
+      "additionalProperties": false
+    },
+    "SaveDirectoryRecord": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "SaveDirectoryRecord"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "$ref": "#/$defs/SaveDirectoryRecordValues"
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "record_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expected_tax": {
+          "$ref": "#/$defs/money"
+        },
+        "tax_location": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "record_id"
+      ],
+      "additionalProperties": false
+    },
+    "ReverseCustomerReceipt": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReverseCustomerReceipt"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "receipt_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sales_receipt": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "receipt_id",
+            "date",
+            "reason",
+            "expected_revision",
+            "sales_receipt"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "VoidCustomerDeposit": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "VoidCustomerDeposit"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "record_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "record_id",
+            "date",
+            "reason",
+            "expected_revision"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "ReverseDeposit": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReverseDeposit"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "deposit_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "deposit_id",
+            "date",
+            "reason",
+            "expected_revision"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "VoidCreditMemo": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "VoidCreditMemo"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "record_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "record_id",
+            "date",
+            "reason",
+            "expected_revision"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "VoidCustomerRefund": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "VoidCustomerRefund"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "record_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "deposit": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "record_id",
+            "date",
+            "reason",
+            "expected_revision",
+            "deposit"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "UnapplyDeposit": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "UnapplyDeposit"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "record_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "record_id",
+            "date",
+            "reason",
+            "expected_revision"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "ReverseJournal": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ReverseJournal"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "journal_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "journal_id",
+            "date",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    },
+    "VoidBill": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "type": {
+          "const": "VoidBill"
+        },
+        "request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "bill_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "date": {
+              "$ref": "#/$defs/date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "bill_id",
+            "date",
+            "reason",
+            "expected_revision"
+          ],
+          "additionalProperties": false
+        },
+        "fs_source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_types": {
+          "const": []
+        },
+        "target_request_key": {
+          "$ref": "#/$defs/uuid"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "type",
+        "request_key",
+        "values",
+        "fs_source",
+        "next_types",
+        "target_request_key",
+        "optional",
+        "requires"
+      ]
+    }
+  }
+}

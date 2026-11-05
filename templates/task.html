@@ -1,0 +1,8 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<div class="task {{ task.flow }}">
+{% if task.url %}<a href="{{ task.url }}">{% else %}<button disabled title="{{ task.label }} — not yet available">{% endif %}
+<svg class="task-icon" aria-hidden="true"><use href="#{{ task.icon }}"/></svg>
+<span class="task-label">{{ task.label }}</span>
+{% if task.url %}</a>{% else %}</button>{% endif %}
+{% if 'down' in task.flow %}<span class="down-arrow" aria-hidden="true"></span>{% endif %}
+</div>

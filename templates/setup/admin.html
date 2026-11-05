@@ -1,0 +1,23 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "setup/base.html" %}
+{% block step %}<h1>Admin login</h1>
+{% if existing %}<p class="setup-note">The logins are already set up{% if request.user.is_authenticated %} (you are signed in as an admin){% endif %}, so this step is skipped. Logins and PINs are managed outside setup.</p>
+<div class="setup-actions"><a class="setup-button" href="{{ back }}">Back</a><span class="spacer"></span><a class="setup-button primary" href="{{ next }}">Next</a></div>
+{% else %}<p class="setup-note">The admin login runs the shop: reports, settings and admin overrides. After this step you are signed in as this admin, and the rest of setup needs it.</p>
+<form method="post" autocomplete="off">{% csrf_token %}{{ form.non_field_errors }}
+<div class="setup-grid">
+{% include "setup/field.html" with field=form.username wide=True %}
+{% include "setup/field.html" with field=form.password1 %}{% include "setup/field.html" with field=form.password2 %}
+</div>
+<h2>Shared register login (optional)</h2>
+<p class="setup-note">One login for the register computer. Staff then tap Cashier and type their own PIN, so they never see the admin screens.</p>
+<div class="setup-grid">
+{% include "setup/field.html" with field=form.register_username wide=True %}
+{% include "setup/field.html" with field=form.register_password1 %}{% include "setup/field.html" with field=form.register_password2 %}
+</div>
+<h2>PIN cashiers (optional)</h2>
+{{ cashiers.management_form }}{{ cashiers.non_form_errors }}
+<table class="setup-table"><tr><th>Name</th><th>4-digit PIN</th></tr>
+{% for row in cashiers %}<tr><td>{{ row.name }}{{ row.name.errors }}</td><td>{{ row.pin }}{{ row.pin.errors }}</td></tr>{% endfor %}</table>
+<div class="setup-actions"><a class="setup-button" href="{{ back }}">Back</a><span class="spacer"></span><button class="setup-button primary">Create logins and continue</button></div></form>
+{% endif %}{% endblock %}

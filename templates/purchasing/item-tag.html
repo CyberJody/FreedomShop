@@ -1,0 +1,30 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Item Price Tag · {{ business.name }}</title><style>body{font-family:Arial,sans-serif;padding:20px}h2{font-size:17px;color:#1f5a33;margin:18px 0 4px}.tag{border:1px solid #888;padding:20px;width:300px}.tag h1{font-size:22px}.price{font-size:28px;font-weight:bold}.controls{margin-bottom:12px}.note{font-size:12px;color:#555}.print-bar{margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.print-bar input{width:55px}.letter-tag{border-top:1px solid #ccc;margin-top:18px;padding-top:4px}@media print{.controls,.note,.zebra-tag,.print-bar,h2{display:none}body{padding:0}.letter-tag{border:0;margin:0}}</style></head><body>
+<div class="controls"><a href="/purchasing/items/{{ record.pk }}/">Back to Item</a> · <a href="/printers/">File &gt; Printers</a></div>
+{% if record.print_tags %}
+<section class="zebra-tag"><h2>Zebra Tag (3 × 4 in)</h2>
+{% include "tags/item-tag-editor.html" %}
+</section>
+<section class="letter-tag"><h2>Letter Tag (Brother printers)</h2>
+<form id="tag-print" class="print-bar" action="/purchasing/items/{{ record.pk }}/tag/print/" method="post">{% csrf_token %}<button type="button" onclick="window.print()">Browser Print</button>
+<label>Printer <select id="tag-printer" name="printer" required>{% for printer in printers %}<option value="{{ printer.pk }}" {% if tag_printer == printer.pk|stringformat:'s' %}selected{% endif %}>{{ printer.name }}</option>{% empty %}<option value="">No active Letter printers</option>{% endfor %}</select></label>
+<label>Copies <input name="copies" type="number" min="1" max="10" step="1" value="1" required></label><button {% if not printers %}disabled{% endif %}>Print Letter Tag</button></form><p id="tag-result" role="status" aria-live="polite"></p>
+<div class="tag"><strong>{{ business.name }}</strong><h1>{{ record.display_name }}</h1><p>{{ record.description }}</p><div class="price">${{ record.price|floatformat:2 }}</div><p>Item No. {{ record.item_number }}</p>{% if record.upc %}<p>UPC {{ record.upc }}</p>{% endif %}{% if record.wood or record.size %}<p>{{ record.wood }} {{ record.size }}</p>{% endif %}</div><p class="note">Letter: one bordered 4 × 3 inch tag per sheet, from the Item List text (the Zebra edits above don't apply). Long text is shortened to fit.</p>
+</section>
+<script>
+(()=>{
+ const form=document.getElementById('tag-print'), printer=document.getElementById('tag-printer'), result=document.getElementById('tag-result');
+ try { const saved=localStorage.getItem('tagPrinter'); if([...printer.options].some(o=>o.value===saved)) printer.value=saved; } catch(_){}
+ printer.addEventListener('change',()=>{try{localStorage.setItem('tagPrinter',printer.value);}catch(_){}});
+ form.addEventListener('submit',async e=>{
+  e.preventDefault(); const button=form.querySelector('button:not([type=button])'); button.disabled=true; result.textContent='Sending tag…';
+  try {
+   const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{'X-CSRFToken':form.elements.csrfmiddlewaretoken.value}});
+   const data=await response.json(); result.textContent=data.error||data.message||'Could not print the tag.';
+   if(response.ok){try{localStorage.setItem('tagPrinter',printer.value);}catch(_){}}
+  }catch(_){result.textContent='Could not confirm printing. Check the printer before trying again.';}
+  finally{button.disabled=false;}
+ });
+})();
+</script>{% else %}<p>Print Tags is off for this item. Enable it in Edit Item before printing.</p>{% endif %}
+</body></html>

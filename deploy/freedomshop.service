@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Unit]
+Description=FreedomShop Point of Sale
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=freedomshop
+Group=freedomshop
+WorkingDirectory=/opt/freedomshop/current
+Environment=PYTHONPATH=/etc/freedomshop
+Environment=DJANGO_SETTINGS_MODULE=settings_site
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/freedomshop/current/.venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8001 --workers 2 --timeout 300 --access-logfile - --error-logfile -
+Restart=on-failure
+RestartSec=3
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/freedomshop/media /var/lib/freedomshop/uploads
+
+[Install]
+WantedBy=multi-user.target

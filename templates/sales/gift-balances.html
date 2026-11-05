@@ -1,0 +1,7 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends 'sales/base.html' %}
+{% block content %}
+<div class="notice">Certificates issued in this app only. QuickBooks certificate tender history does not establish outstanding balances; older certificates need verified opening balances before they can be redeemed here.</div>
+<form class="tools"><label>Certificate number <input name="q" value="{{ q }}" maxlength="100"></label><button class="button">Search</button><a class="button" href="/pos/sale/new/">Make a Sale</a></form>
+<div class="table-scroll"><table><thead><tr><th>Certificate number</th><th>Receipt</th><th>Issued amount</th><th>Remaining balance</th></tr></thead><tbody>{% for c in certificates %}<tr><td>{{ c.number }}</td><td><a href="/pos/sale/{{ c.issued_on.token }}/">{{ c.issued_on.numbered_label }}</a></td><td>${{ c.face_value }}</td><td>${{ c.balance }}</td></tr>{% empty %}<tr><td colspan="4">No certificates found.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

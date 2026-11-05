@@ -1,0 +1,4 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% if sort_fields %}{{ sort_fields|json_script:'list-sort-fields' }}<script>
+(()=>{const fields=JSON.parse(document.getElementById('list-sort-fields').textContent),current=new URL(location.href).searchParams.get('sort')||'{{ sort|escapejs }}';document.querySelectorAll('.table-scroll table thead th').forEach((th,i)=>{const field=fields[i];if(!field)return;const a=document.createElement('a');const url=new URL(location.href);url.searchParams.set('sort',current===field?'-'+field:field);['page','at','customer'].forEach(k=>{if(k!=='customer')url.searchParams.delete(k);});a.href=url.pathname+url.search;a.textContent=th.textContent+(current===field?' ↑':current==='-'+field?' ↓':'');a.style.color='inherit';th.replaceChildren(a);th.setAttribute('aria-sort',current===field?'ascending':current==='-'+field?'descending':'none');});})();
+</script>{% endif %}

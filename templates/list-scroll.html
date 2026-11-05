@@ -1,0 +1,241 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<style>
+#list-pages[hidden],#list-scroll-status[hidden],#list-scroll-status [hidden]{display:none!important}
+#list-scroll{min-height:100px;overflow-anchor:none;background:white;flex:1}
+#list-scroll table.virtual{table-layout:auto;min-width:100%;border-collapse:separate;border-spacing:0}
+#list-scroll .virtual th{height:38px;z-index:2}
+#list-scroll .virtual td{height:38px;padding:0 10px;line-height:37px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+#list-scroll .virtual td.list-check{width:24px;text-align:center}
+#list-scroll .virtual td a{margin-right:6px}
+#list-scroll .virtual .spacer td{padding:0;border:0;line-height:0;background:white}
+#list-scroll .virtual tr:not(.stripe) td{background:white}#list-scroll .virtual tr.stripe td{background:var(--brand-surface)}
+#list-scroll .virtual tr:not(.spacer):hover td{background:var(--brand-hover)}#list-scroll .virtual .loading{color:#626b75}
+#list-scroll .virtual tr.catalog-selected td{background:var(--brand-hover)}
+#list-scroll-status{flex-shrink:0;flex-wrap:nowrap;min-width:0}
+#list-range{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:bold;color:var(--brand-green)}
+#list-load-status{font-size:12px}#list-paged-link{white-space:nowrap}
+.pos-main:has(#list-scroll)>.tools,.pos-main:has(#list-scroll)>.notice,.pos-main:has(#list-scroll)>.customer-info,.pos-main:has(#list-scroll)>.selection-status{flex-shrink:0}
+.list-print-note{display:none}.list-print-note[hidden]{display:none!important}
+@media(max-width:650px){.pos-workspace:has(#list-scroll){height:calc(100dvh - 130px);min-height:400px}#list-load-status{max-width:110px}}
+@media print{#list-scroll-status,#list-scroll .spacer{display:none!important}#list-scroll{overflow:visible}#list-scroll table.virtual{width:100%;min-width:0}#list-scroll .virtual td{height:auto;line-height:normal;white-space:normal}.list-print-note{display:block}}
+</style>
+<p id="list-print-note" class="list-print-note" hidden>{{ title }} — this printout contains only the current scrolling window. Use pages for numbered printouts.</p>
+<div class="paging" id="list-scroll-status" hidden><span id="list-range" title="Top visible record"></span><span id="list-load-status" role="status" aria-live="polite"></span><button class="button" id="list-retry" type="button" hidden>Retry</button><a id="list-paged-link" href="?{{ list_scroll_config.params }}&amp;view=pages">Use pages</a></div>
+{{ list_scroll_config|json_script:"list-scroll-config" }}
+<script>
+(() => {
+  'use strict';
+  const viewport = document.getElementById('list-scroll');
+  const url = new URL(location.href);
+  if (!viewport || url.searchParams.get('view') === 'pages' || !window.fetch) return;
+  const config = JSON.parse(document.getElementById('list-scroll-config').textContent);
+  const params = new URLSearchParams(config.params);
+  const storageKey = 'freedomshop.list-scroll.v1:' + location.pathname + '?' + params;
+  const table = viewport.querySelector('table'), body = table.tBodies[0];
+  const footer = document.getElementById('list-scroll-status');
+  const range = document.getElementById('list-range');
+  const message = document.getElementById('list-load-status');
+  const retry = document.getElementById('list-retry');
+  const pages = document.getElementById('list-pages');
+  const fallback = document.getElementById('list-paged-link');
+  const ROW = 38, BATCH = 100, OVERSCAN = 8, MAX_BATCHES = 6;
+  const cache = new Map(), pending = new Set(), failed = new Set();
+  let total = config.total, active = false, starting = false, frame = 0, fetchTimer, saveTimer;
+  let version = 0, lastRender = '', focusIndex = null, resetOnLeave = false;
+  let restored = null;
+  try { restored = history.state?.listScroll || JSON.parse(sessionStorage.getItem(storageKey)); } catch (_) {}
+  if (restored?.key !== storageKey) restored = null;
+  const at = Number(url.searchParams.get('at'));
+  const explicitAt = url.searchParams.has('at') && Number.isSafeInteger(at) && at >= 0;
+  const historyPosition = history.state?.listScroll;
+  const initialTop = historyPosition?.key === storageKey ? historyPosition.top
+    : explicitAt ? (restored && Math.floor(restored.top / ROW) === at ? restored.top : at * ROW)
+    : restored ? restored.top : config.start * ROW;
+  const initialLeft = restored?.left || 0;
+  const firstVisible = () => Math.max(0, Math.min(total - 1, Math.floor(viewport.scrollTop / ROW)));
+  const lastVisible = () => Math.min(total, Math.ceil((viewport.scrollTop + Math.max(ROW, viewport.clientHeight - 38)) / ROW));
+  function save() {
+    if (!active || resetOnLeave) return;
+    const state = {key: storageKey, top: viewport.scrollTop, left: viewport.scrollLeft};
+    try { sessionStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) {}
+    try { history.replaceState({...history.state, listScroll: state}, ''); } catch (_) {}
+  }
+  function listURL(index) {
+    const query = new URLSearchParams(params);
+    query.set('page', Math.floor(index / 50) + 1);
+    query.set('at', active ? firstVisible() : index);
+    return location.pathname + '?' + query;
+  }
+  function spacer(height) {
+    const row = document.createElement('tr'), cell = document.createElement('td');
+    row.className = 'spacer'; row.setAttribute('aria-hidden', 'true');
+    cell.colSpan = config.columns; cell.style.height = height + 'px'; row.append(cell); return row;
+  }
+  function visibleBatches() {
+    const start = Math.max(0, firstVisible() - OVERSCAN);
+    const end = Math.min(total, lastVisible() + OVERSCAN);
+    const blocks = [];
+    for (let offset = Math.floor(start / BATCH) * BATCH; offset < end; offset += BATCH) blocks.push(offset);
+    return blocks;
+  }
+  function fill(cell, value, index, first) {
+    const segments = Array.isArray(value) ? value : [value];
+    let title = '';
+    for (const segment of segments) {
+      if (segment && typeof segment === 'object') {
+        const link = document.createElement('a');
+        link.textContent = segment.text; link.href = segment.href;
+        if (first) { link.dataset.row = index; first = false; }
+        cell.append(link); title += segment.text;
+      } else { cell.append(String(segment)); title += String(segment); }
+    }
+    cell.title = title;
+  }
+  function render() {
+    if (!active) return;
+    const first = firstVisible(), last = lastVisible();
+    const start = Math.max(0, first - OVERSCAN), end = Math.min(total, last + OVERSCAN);
+    const signature = [start, end, version].join(':');
+    if (signature !== lastRender) {
+      const focused = document.activeElement?.closest('a[data-row]');
+      const restoreFocus = focusIndex ?? (focused ? Number(focused.dataset.row) : null);
+      const fragment = document.createDocumentFragment();
+      fragment.append(spacer(start * ROW));
+      for (let index = start; index < end; index++) {
+        const offset = Math.floor(index / BATCH) * BATCH;
+        const record = cache.get(offset)?.[index - offset];
+        const row = document.createElement('tr');
+        row.dataset.index = index;
+        row.setAttribute('aria-rowindex', index + 2);
+        if (index % 2) row.classList.add('stripe');
+        if (record) {
+          row.dataset.catalogId = record.id;
+          if (config.checkbox) {
+            const cell = document.createElement('td'); cell.className = 'list-check';
+            const check = document.createElement('input'); check.type = 'checkbox'; check.name = config.checkbox;
+            check.value = record.token || record.id; check.setAttribute('aria-label', 'Select ' + record.name);
+            cell.append(check); row.append(cell);
+          }
+          let firstLink = true;
+          record.cells.forEach(value => {
+            const cell = document.createElement('td');
+            fill(cell, value, index, firstLink);
+            if (firstLink && cell.querySelector('a')) firstLink = false;
+            row.append(cell);
+          });
+          document.dispatchEvent(new CustomEvent('list-scroll:row', {detail: {row, record}}));
+        } else {
+          const cell = document.createElement('td'); cell.colSpan = config.columns; cell.className = 'loading';
+          cell.textContent = failed.has(offset) ? 'Unable to load records — select Retry below.' : 'Loading…';
+          row.append(cell);
+        }
+        fragment.append(row);
+      }
+      fragment.append(spacer((total - end) * ROW));
+      body.replaceChildren(fragment);
+      lastRender = signature;
+      if (restoreFocus !== null) {
+        const target = body.querySelector(`a[data-row="${restoreFocus}"]`);
+        if (target) { target.focus({preventScroll:true}); focusIndex = null; }
+      }
+      document.dispatchEvent(new CustomEvent('list-scroll:render'));
+    }
+    const leading = cache.get(Math.floor(first / BATCH) * BATCH)?.[first % BATCH];
+    range.textContent = total ? (leading?.name || 'Loading…') : 'No matching records';
+    range.title = range.textContent;
+    const blocks = visibleBatches();
+    const hasError = blocks.some(offset => failed.has(offset));
+    const loading = blocks.some(offset => !cache.has(offset) && !failed.has(offset));
+    viewport.setAttribute('aria-busy', String(loading));
+    retry.hidden = !hasError;
+    const text = hasError ? 'Connection interrupted. Your place is saved.' : loading ? 'Loading…' : (total + ' record' + (total === 1 ? '' : 's') + (last >= total ? ' · End of list' : ' · Scroll to browse more'));
+    if (message.textContent !== text) message.textContent = text;
+    const fallbackURL = new URL(listURL(first), location.origin);
+    fallbackURL.searchParams.set('view', 'pages'); fallback.href = fallbackURL.pathname + fallbackURL.search;
+  }
+  async function load(offset) {
+    pending.add(offset);
+    try {
+      const query = new URLSearchParams(params); query.set('format', 'rows'); query.set('offset', offset);
+      const response = await fetch(location.pathname + '?' + query, {cache:'no-store', headers:{Accept:'application/json'}, signal:AbortSignal.timeout(15000)});
+      if (!response.ok) throw new Error('Unable to fetch records');
+      const data = await response.json();
+      if (!Array.isArray(data.rows) || data.offset !== offset || !Number.isSafeInteger(data.total)) throw new Error('Invalid response');
+      if (data.total !== total) { total = data.total; cache.clear(); }
+      table.setAttribute('aria-rowcount', total + 1);
+      cache.delete(offset); cache.set(offset, data.rows); failed.delete(offset);
+      const keep = new Set(visibleBatches());
+      for (const key of cache.keys()) {
+        if (cache.size <= MAX_BATCHES) break;
+        if (!keep.has(key)) cache.delete(key);
+      }
+      version++;
+      return true;
+    } catch (_) { failed.add(offset); version++; return false; }
+    finally { pending.delete(offset); if (active) { render(); requestMissing(); } }
+  }
+  function requestMissing() {
+    if (!active) return;
+    for (const offset of visibleBatches()) {
+      if (pending.size >= 2) break;
+      if (!cache.has(offset) && !pending.has(offset) && !failed.has(offset)) void load(offset);
+    }
+  }
+  async function start() {
+    if (starting || active) return;
+    starting = true;
+    const top = Math.max(0, Math.min(initialTop, Math.max(0, total - 1) * ROW));
+    const offset = Math.floor(top / ROW / BATCH) * BATCH;
+    if (!await load(offset)) {
+      footer.hidden = false; retry.hidden = false;
+      message.textContent = 'Continuous scrolling could not connect. Retry or use the page links.';
+      starting = false; return;
+    }
+    active = true; starting = false;
+    document.getElementById('list-print-note').hidden = false;
+    table.classList.add('virtual'); table.setAttribute('aria-rowcount', total + 1);
+    table.tHead.rows[0].setAttribute('aria-rowindex', '1');
+    if (pages) { pages.hidden = true; pages.style.display = 'none'; }
+    footer.hidden = false;
+    body.replaceChildren(spacer(total * ROW));
+    viewport.scrollTop = top; viewport.scrollLeft = initialLeft;
+    render(); requestMissing();
+    requestAnimationFrame(() => {
+      viewport.scrollTop = top; viewport.scrollLeft = initialLeft;
+      render(); requestMissing();
+    });
+    if (window.ResizeObserver) new ResizeObserver(() => { render(); requestMissing(); }).observe(viewport);
+  }
+  viewport.addEventListener('scroll', () => {
+    if (!active) return;
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); });
+    clearTimeout(fetchTimer); fetchTimer = setTimeout(requestMissing, 80);
+    clearTimeout(saveTimer); saveTimer = setTimeout(save, 150);
+  }, {passive:true});
+  viewport.addEventListener('keydown', event => {
+    const link = event.target.closest('a[data-row]');
+    if (!link || !['ArrowDown','ArrowUp'].includes(event.key)) return;
+    event.preventDefault();
+    focusIndex = Math.max(0, Math.min(total - 1, Number(link.dataset.row) + (event.key === 'ArrowDown' ? 1 : -1)));
+    if (focusIndex < firstVisible()) viewport.scrollTop = focusIndex * ROW;
+    else if (focusIndex >= lastVisible() - 1) viewport.scrollTop = (focusIndex + 1) * ROW - viewport.clientHeight + 38;
+    lastRender = ''; render(); requestMissing();
+  });
+  retry.addEventListener('click', () => { failed.clear(); version++; if (active) { render(); requestMissing(); } else void start(); });
+  document.addEventListener('click', event => {
+    const link = event.target.closest('a');
+    if (!link || !active) return;
+    save();
+  }, true);
+  const searchForm = document.querySelector('form.list-search');
+  if (searchForm) searchForm.addEventListener('submit', () => {
+    resetOnLeave = true;
+    const next = new URLSearchParams(new FormData(searchForm));
+    for (const key of ['page', 'at', 'view', 'format', 'offset', 'random']) next.delete(key);
+    try { sessionStorage.removeItem('freedomshop.list-scroll.v1:' + location.pathname + '?' + next); } catch (_) {}
+  });
+  window.addEventListener('pagehide', save);
+  window.addEventListener('pageshow', () => { if (active) { render(); requestMissing(); } });
+  void start();
+})();
+</script>

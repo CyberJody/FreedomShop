@@ -1,0 +1,28 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "purchasing/base.html" %}{% block content %}<style>
+.trash-note{padding:8px 12px;background:#e7f5d6;color:#365424;border-bottom:1px solid #c1d4ac;font-size:13px}
+.trash-table td,.trash-table th{white-space:nowrap}.trash-table td.desc{white-space:normal;min-width:420px}
+.trash-table input[type=checkbox]{margin-right:8px}
+.trash-admin-note{font-size:12px;color:#586372}
+</style>
+
+<div class="tools"><form class="list-search" method="get"><input type="search" name="q" value="{{ query }}" placeholder="Search Items Trash" aria-label="Search Items Trash" maxlength="100"><button class="button">Search</button><a href="?">Clear</a></form>
+<button type="button" class="button" data-select-all>Select All on Page</button><button type="button" class="button" data-clear-all>Clear Selection</button>
+{% if admin_mode_on %}<button class="button primary" id="restore-selected" form="restore-form" disabled>Restore Selected</button>{% else %}<span class="trash-admin-note">Sign in as an admin to restore items.</span>{% endif %}
+<a class="button" href="/purchasing/items/">Item List</a></div>
+{% if notice %}<div class="trash-note" role="status">{{ notice }}</div>{% endif %}
+<form method="post" action="/purchasing/trash/restore/" id="restore-form">{% csrf_token %}<div class="selection-status"><span id="selected-count" role="status">0 selected</span> · Trashed items stay on saved receipts, orders, purchase orders, reports and history. Restore puts an item back on the Item List with the stock that was zeroed when it was trashed.</div>
+<div class="table-scroll"><table class="trash-table"><thead><tr><th>Item Name</th><th>Item No.</th><th>Item Description</th><th class="number">Stock Zeroed</th><th>Trashed</th><th>By</th><th>Vendor</th><th>Department</th></tr></thead><tbody>
+{% for row in rows %}<tr data-trash-id="{{ row.item.pk }}"><td><label><input type="checkbox" name="item" value="{{ row.item.pk }}" class="trash-select" aria-label="Select {{ row.item.display_name }}">{{ row.item.display_name }}</label></td><td>{{ row.item.sku }}</td><td class="desc">{{ row.item.description }}</td><td class="number">{% if row.entry and row.entry.quantity_zeroed != None %}{{ row.entry.quantity_zeroed|qty }}{% else %}—{% endif %}</td><td>{% if row.entry %}{{ row.entry.trashed_at|date:'m/d/Y g:i A' }}{% else %}—{% endif %}</td><td>{% if row.entry %}{{ row.entry.trashed_by|default:'—' }}{% else %}—{% endif %}</td><td>{{ row.item.primary_vendor|default:'—' }}</td><td>{{ row.item.department|default:'—' }}</td></tr>
+{% endfor %}</tbody></table>{% if not rows %}<div class="empty"><strong>{% if query %}No trashed items match "{{ query }}"{% else %}The Items Trash is empty{% endif %}</strong>Items deleted from the Item List (Delete Selected, admin sign-in) appear here and can be restored.</div>{% endif %}</div>
+<div id="list-pages">{% include "purchasing/paging.html" %}</div>
+</form>
+<script>
+(()=>{const boxes=()=>[...document.querySelectorAll('.trash-select')],count=document.getElementById('selected-count'),restore=document.getElementById('restore-selected');
+function update(){const n=boxes().filter(b=>b.checked).length;count.textContent=n+' selected';if(restore)restore.disabled=!n;boxes().forEach(b=>b.closest('tr').classList.toggle('catalog-selected',b.checked));}
+boxes().forEach(b=>b.addEventListener('change',update));
+document.querySelector('[data-select-all]').onclick=()=>{boxes().forEach(b=>b.checked=true);update();};
+document.querySelector('[data-clear-all]').onclick=()=>{boxes().forEach(b=>b.checked=false);update();};
+update();})();
+</script>
+{% endblock %}

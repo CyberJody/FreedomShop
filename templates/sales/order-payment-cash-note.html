@@ -1,0 +1,2 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% load report_tags %}{% if payment.change_given is not None %}<span class="cash-change-note">Cash {{ payment.tendered|dollars }} · Change {{ payment.change_given|dollars }}</span>{% endif %}

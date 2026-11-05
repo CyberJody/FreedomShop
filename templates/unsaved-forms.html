@@ -1,0 +1,4 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<script>
+(()=>{let dirty=false;const forms=[...document.querySelectorAll('form.catalog-form,form.item-form,form.purchase-form')];for(const form of forms){form.addEventListener('input',()=>dirty=true);form.addEventListener('change',()=>dirty=true);form.addEventListener('submit',e=>{if(!e.defaultPrevented)dirty=false;});}window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});document.querySelectorAll('form[action="/logout/"]').forEach(f=>f.addEventListener('submit',()=>{sessionStorage.removeItem('freedomshop-selected-items');sessionStorage.removeItem('freedomshop-selected-orders');}));})();
+</script>

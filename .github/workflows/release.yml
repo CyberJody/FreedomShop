@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Releases are manual for now: push a v* tag matching freedomshop/__version__.py, then run this workflow from the
+# Actions tab with "Use workflow from" set to that tag. To publish on every tag push instead, restore the trigger:
+#   push:
+#     tags: ['v*']
+name: Release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Require a release tag
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "Run this workflow from a v* tag, not from $GITHUB_REF" >&2
+          exit 1
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Check release tag and version agree
+        run: python deploy/check_release_tag.py
+      - name: Build committed source archive
+        run: ./release.sh
+      - name: Build Debian/Ubuntu package
+        run: python deploy/build_deb.py dist/freedomshop-*.tar.gz --output dist
+      - name: Checksums
+        run: cd dist && sha256sum freedomshop-*.tar.gz freedomshop_*.deb > SHA256SUMS
+      # Private repositories may not have attestations enabled. Public releases
+      # always attest; no repository secrets or manually provisioned keys needed.
+      - name: Attest build provenance
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            dist/freedomshop-*.tar.gz
+            dist/freedomshop_*.deb
+      - name: Publish source, package and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/freedomshop-*.tar.gz dist/freedomshop_*.deb dist/SHA256SUMS --verify-tag --generate-notes --title "FreedomShop $GITHUB_REF_NAME"
+  image:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/cyberjody/freedomshop
+    steps:
+      - name: Require a release tag
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "Run this workflow from a v* tag, not from $GITHUB_REF" >&2
+          exit 1
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check release tag and version agree
+        run: python3 deploy/check_release_tag.py
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push the container image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/CyberJody/FreedomShop
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+            org.opencontainers.image.version=${{ github.ref_name }}
+      - name: Attest image provenance
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

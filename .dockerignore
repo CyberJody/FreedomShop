@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+**/__pycache__
+**/*.pyc
+dist
+data
+uploads
+*.dump
+*.tar.gz

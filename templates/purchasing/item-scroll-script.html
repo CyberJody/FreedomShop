@@ -1,0 +1,216 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<script>
+(() => {
+  'use strict';
+  const viewport = document.getElementById('item-scroll');
+  const url = new URL(location.href);
+  if (!viewport || url.searchParams.get('view') === 'pages' || !window.fetch) return;
+  const config = JSON.parse(document.getElementById('item-scroll-config').textContent);
+  let names = config.names || [];
+  const params = new URLSearchParams({q: config.q, status: config.status, source: config.source,sort:config.sort||''});
+  const storageKey = 'freedomshop.item-scroll.v1:' + params;
+  const table = viewport.querySelector('table'), body = table.tBodies[0];
+  const footer = document.getElementById('item-scroll-status');
+  const range = document.getElementById('item-range');
+  const message = document.getElementById('item-load-status');
+  const retry = document.getElementById('item-retry');
+  const pages = document.getElementById('item-pages');
+  const fallback = document.getElementById('item-paged-link');
+  const ROW = 38, BATCH = 100, OVERSCAN = 8, MAX_BATCHES = 6;
+  const cache = new Map(), pending = new Set(), failed = new Set();
+  let total = config.total, active = false, starting = false, frame = 0, fetchTimer, saveTimer;
+  let version = 0, lastRender = '', focusIndex = null, resetOnLeave = false;
+  let restored = null;
+  try { restored = history.state?.itemScroll || JSON.parse(sessionStorage.getItem(storageKey)); } catch (_) {}
+  if (restored?.key !== storageKey) restored = null;
+  const at = Number(url.searchParams.get('at'));
+  const explicitAt = url.searchParams.has('at') && Number.isSafeInteger(at) && at >= 0;
+  const historyPosition = history.state?.itemScroll;
+  const initialTop = historyPosition?.key === storageKey ? historyPosition.top
+    : explicitAt ? (restored && Math.floor(restored.top / ROW) === at ? restored.top : at * ROW)
+    : restored ? restored.top : config.start * ROW;
+  const initialLeft = restored?.left || 0;
+  const firstVisible = () => Math.max(0, Math.min(total - 1, Math.floor(viewport.scrollTop / ROW)));
+  const lastVisible = () => Math.min(total, Math.ceil((viewport.scrollTop + Math.max(ROW, viewport.clientHeight - 38)) / ROW));
+  function save() {
+    if (!active || resetOnLeave) return;
+    const state = {key: storageKey, top: viewport.scrollTop, left: viewport.scrollLeft};
+    // Store position only; item data stays in the bounded in-memory cache.
+    try { sessionStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) {}
+    try { history.replaceState({...history.state, itemScroll: state}, ''); } catch (_) {}
+  }
+  function listURL(index, item) {
+    const query = new URLSearchParams(params);
+    query.set('page', Math.floor(index / 50) + 1);
+    query.set('at', active ? firstVisible() : index);
+    return '/purchasing/items/?' + query;
+  }
+  function spacer(height) {
+    const row = document.createElement('tr'), cell = document.createElement('td');
+    row.className = 'spacer'; row.setAttribute('aria-hidden', 'true');
+    cell.colSpan = config.columns; cell.style.height = height + 'px'; row.append(cell); return row;
+  }
+  function visibleBatches() {
+    const start = Math.max(0, firstVisible() - OVERSCAN);
+    const end = Math.min(total, lastVisible() + OVERSCAN);
+    const blocks = [];
+    for (let offset = Math.floor(start / BATCH) * BATCH; offset < end; offset += BATCH) blocks.push(offset);
+    return blocks;
+  }
+  function render() {
+    if (!active) return;
+    const first = firstVisible(), last = lastVisible();
+    const start = Math.max(0, first - OVERSCAN), end = Math.min(total, last + OVERSCAN);
+    const signature = [start, end, version].join(':');
+    if (signature !== lastRender) {
+      const focused = document.activeElement?.closest('a[data-row]');
+      const restoreFocus = focusIndex ?? (focused ? Number(focused.dataset.row) : null);
+      const fragment = document.createDocumentFragment();
+      fragment.append(spacer(start * ROW));
+      for (let index = start; index < end; index++) {
+        const offset = Math.floor(index / BATCH) * BATCH;
+        const item = cache.get(offset)?.[index - offset];
+        const row = document.createElement('tr');
+        row.dataset.index = index;
+        row.setAttribute('aria-rowindex', index + 2);
+        if (index % 2) row.classList.add('stripe');
+        if (item) {
+          item.cells.forEach((value, column) => {
+            const cell = document.createElement('td');
+            cell.title = value;
+            if (column === 0) {
+              if(config.source==='inventory' && window.freedomshopItemCheckbox)cell.append(window.freedomshopItemCheckbox(item.id,value));
+              const link = document.createElement('a');
+              link.textContent = value; link.dataset.row = index;
+              const target = new URL(item.href, location.origin);
+              target.searchParams.set('return_to', listURL(first));
+              link.href = target; cell.append(link);
+            } else {
+              cell.textContent = value;
+              // On Order (column 6) opens the item's purchase orders, like clicking the quantity in QB.
+              if (column === 5 && item.orders) { cell.className = 'on-order-link'; cell.dataset.itemOrders = item.id; cell.title = 'Show the purchase orders for this item'; }
+            }
+            row.append(cell);
+          });
+        } else {
+          const cell = document.createElement('td'); cell.colSpan = config.columns; cell.className = 'loading';
+          cell.textContent = failed.has(offset) ? 'Unable to load items — select Retry below.' : 'Loading items…';
+          row.append(cell);
+        }
+        fragment.append(row);
+      }
+      fragment.append(spacer((total - end) * ROW));
+      body.replaceChildren(fragment);
+      lastRender = signature;
+      if (restoreFocus !== null) {
+        const target = body.querySelector(`a[data-row="${restoreFocus}"]`);
+        if (target) { target.focus({preventScroll:true}); focusIndex = null; }
+      }
+    }
+    const leading = cache.get(Math.floor(first / BATCH) * BATCH)?.[first % BATCH];
+    range.textContent = total ? names[first] || leading?.name || 'Loading item name…' : 'No matching items';
+    range.title = range.textContent;
+    const blocks = visibleBatches();
+    const hasError = blocks.some(offset => failed.has(offset));
+    const loading = blocks.some(offset => !cache.has(offset) && !failed.has(offset));
+    viewport.setAttribute('aria-busy', String(loading));
+    retry.hidden = !hasError;
+    const text = hasError ? 'Connection interrupted. Your place is saved.' : loading ? 'Loading items…' : last >= total ? 'End of item list' : 'Scroll to browse more items';
+    if (message.textContent !== text) message.textContent = text;
+    const fallbackURL = new URL(listURL(first), location.origin);
+    fallbackURL.searchParams.set('view', 'pages'); fallback.href = fallbackURL.pathname + fallbackURL.search;
+  }
+  async function load(offset) {
+    pending.add(offset);
+    try {
+      const query = new URLSearchParams(params); query.set('format', 'rows'); query.set('offset', offset);
+      const response = await fetch('/purchasing/items/?' + query, {cache:'no-store', headers:{Accept:'application/json'}, signal:AbortSignal.timeout(15000)});
+      if (!response.ok) throw new Error('Unable to fetch items');
+      const data = await response.json();
+      if (!Array.isArray(data.rows) || data.offset !== offset || !Number.isSafeInteger(data.total)) throw new Error('Invalid response');
+      if (data.total !== total) { total = data.total; cache.clear(); names = []; }
+      table.setAttribute('aria-rowcount', total + 1);
+      cache.delete(offset); cache.set(offset, data.rows); failed.delete(offset);
+      const keep = new Set(visibleBatches());
+      for (const key of cache.keys()) {
+        if (cache.size <= MAX_BATCHES) break;
+        if (!keep.has(key)) cache.delete(key);
+      }
+      version++;
+      return true;
+    } catch (_) { failed.add(offset); version++; return false; }
+    finally { pending.delete(offset); if (active) { render(); requestMissing(); } }
+  }
+  function requestMissing() {
+    if (!active) return;
+    for (const offset of visibleBatches()) {
+      if (pending.size >= 2) break;
+      if (!cache.has(offset) && !pending.has(offset) && !failed.has(offset)) void load(offset);
+    }
+  }
+  async function start() {
+    if (starting || active) return;
+    starting = true;
+    const top = Math.max(0, Math.min(initialTop, Math.max(0, total - 1) * ROW));
+    const offset = Math.floor(top / ROW / BATCH) * BATCH;
+    if (!await load(offset)) {
+      footer.hidden = false; retry.hidden = false;
+      message.textContent = 'Continuous scrolling could not connect. Retry or use the page links.';
+      starting = false; return;
+    }
+    active = true; starting = false;
+    document.getElementById('item-print-note').hidden = false;
+    table.classList.add('virtual'); table.setAttribute('aria-rowcount', total + 1);
+    table.tHead.rows[0].setAttribute('aria-rowindex', '1');
+    pages.hidden = true; pages.style.display = 'none'; footer.hidden = false;
+    // Establish the full height before restoring a deep position.
+    body.replaceChildren(spacer(total * ROW));
+    viewport.scrollTop = top; viewport.scrollLeft = initialLeft;
+    render(); requestMissing();
+    // Finish restoration after the table, footer, and details panel have laid out.
+    requestAnimationFrame(() => {
+      viewport.scrollTop = top; viewport.scrollLeft = initialLeft;
+      render(); requestMissing();
+    });
+    if (window.ResizeObserver) new ResizeObserver(() => { render(); requestMissing(); }).observe(viewport);
+  }
+  viewport.addEventListener('scroll', () => {
+    if (!active) return;
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); });
+    clearTimeout(fetchTimer); fetchTimer = setTimeout(requestMissing, 80);
+    clearTimeout(saveTimer); saveTimer = setTimeout(save, 150);
+  }, {passive:true});
+  viewport.addEventListener('keydown', event => {
+    const link = event.target.closest('a[data-row]');
+    if (!link || !['ArrowDown','ArrowUp'].includes(event.key)) return;
+    event.preventDefault();
+    focusIndex = Math.max(0, Math.min(total - 1, Number(link.dataset.row) + (event.key === 'ArrowDown' ? 1 : -1)));
+    if (focusIndex < firstVisible()) viewport.scrollTop = focusIndex * ROW;
+    else if (focusIndex >= lastVisible() - 1) viewport.scrollTop = (focusIndex + 1) * ROW - viewport.clientHeight + 38;
+    lastRender = ''; render(); requestMissing();
+  });
+  retry.addEventListener('click', () => { failed.clear(); version++; if (active) { render(); requestMissing(); } else void start(); });
+  document.addEventListener('click', event => {
+    const link = event.target.closest('a');
+    if (!link || !active) return;
+    save();
+    const destination = new URL(link.href, location.href);
+    if (destination.origin !== location.origin) return;
+    if (/^\/purchasing\/items\/(?:new|\d+)\/$/.test(destination.pathname)) {
+      destination.searchParams.set('return_to', listURL(firstVisible())); link.href = destination;
+    } else if (link.closest('.tools')) {
+      destination.searchParams.set('source', config.source);
+      destination.searchParams.set('at', '0'); link.href = destination;
+    }
+  }, true);
+  document.querySelector('form.list-search').addEventListener('submit', () => {
+    resetOnLeave = true;
+    const form = document.querySelector('form.list-search');
+    const next = new URLSearchParams({q:form.q.value.trim(),status:form.status?.value || 'all',source:config.source,sort:config.sort||''});
+    try { sessionStorage.removeItem('freedomshop.item-scroll.v1:' + next); } catch (_) {}
+  });
+  window.addEventListener('pagehide', save);
+  window.addEventListener('pageshow', () => { if (active) { render(); requestMissing(); } });
+  void start();
+})();
+</script>

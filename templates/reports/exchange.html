@@ -1,0 +1,35 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}
+{% block extra_style %}<style>
+.exchange-options,.exchange-day{padding:16px;border-bottom:1px solid #bdc6cf}.exchange-options{display:flex;gap:16px;align-items:end;flex-wrap:wrap}.exchange-day h2{margin:0 0 12px}.exchange-day pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#f4f5f6;padding:12px;max-height:500px;overflow:auto}.exchange-day table{max-width:1000px}.exchange-day caption{text-align:left;font-weight:bold;padding:12px 0}.exchange-checks{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0}.exchange-error,.exchange-fail{color:#923328}.exchange-pass{color:#245c32}.exchange-note{padding:12px 16px;line-height:1.5}
+</style>{% endblock %}
+{% block task_shortcuts %}<a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/reports/daily-totals/">Daily Totals</a><a class="shortcut" href="/reports/sales-tax/">Sales Tax</a><a class="shortcut" href="/">Home</a>{% endblock %}
+{% block content %}
+<form method="get" class="exchange-options">
+<label class="field">From / business day<input type="date" name="start" required value="{{ start }}"></label>
+<label class="field">Through<input type="date" name="end" value="{{ end }}"></label>
+<button class="button primary" type="submit">Display exchange</button>
+<button class="button" type="submit" name="format" value="zip">Download range ZIP</button>
+</form>
+{% if error %}<p class="exchange-note exchange-error" role="alert">{{ error }}</p>{% endif %}
+<p class="exchange-note">One file per business day, using the same cash-basis ledger as Daily Totals and Sales Tax. Choose up to 366 days. Leave Through blank for one day. These files contain proposals for review in FreedomBooks; importing requires account mapping and support for the shop's stated tax amounts.</p>
+<section class="exchange-day"><h2>Exchange runs</h2>
+<p>The latest 100 retained runs. Re-export downloads the original bytes and restores the configured outbox file.</p>
+<table class="report-table"><thead><tr><th>Day</th><th>Generated</th><th>Status</th><th>SHA-256</th><th>Acknowledgement / error</th><th>Action</th></tr></thead><tbody>
+{% for run in runs %}<tr class="{% if run.status == 'failed' %}exchange-fail{% endif %}"><td>{{ run.day|date:"Y-m-d" }}</td><td>{{ run.generated_at|date:"c" }}</td><td>{{ run.get_status_display }}</td><td style="overflow-wrap:anywhere;max-width:180px">{{ run.file_sha256 }}</td><td>{{ run.ack_reference }}{% if run.error %}<p role="alert">{{ run.error }}</p>{% endif %}
+{% if run.push_responses %}<details><summary>Live push responses</summary><pre>{{ run.push_responses }}</pre></details>{% endif %}</td><td>{% if run.exported_at %}<form method="post" action="/reports/exchange/{{ run.day|date:'Y-m-d' }}/re-export/">{% csrf_token %}<button class="button" type="submit">Re-export</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">No exchange runs yet.</td></tr>{% endfor %}</tbody></table></section>
+{% for report in reports %}<section class="exchange-day">
+<h2>{{ report.body.day }}</h2><a class="button" href="/reports/exchange/{{ report.body.day }}.json">Download day JSON</a>
+{% if report.body.corrections %}<p class="exchange-note">Includes historical corrections recorded on this day. The summary includes their signed changes; day_summary retains this day's original ledger figures.</p>{% endif %}
+<div class="exchange-checks">{% for label, passed in report.checks %}<span class="{% if passed %}exchange-pass{% else %}exchange-fail{% endif %}">{{ label }}: <strong>{% if passed %}PASS{% else %}FAIL — review source documents{% endif %}</strong></span>{% endfor %}</div>
+<table class="report-table"><caption>Cash-basis summary ({{ report.body.shop.currency }})</caption><tbody>{% for label, value in report.summary %}<tr><th scope="row">{{ label }}</th><td class="number">{{ value }}</td></tr>{% endfor %}</tbody></table>
+<table class="report-table"><caption>Tax locations</caption><thead><tr><th>Location</th><th>Gross</th><th>Discount</th><th>Taxable</th><th>Non-taxable</th><th>Tax</th><th>Total</th></tr></thead><tbody>{% for location, values in report.body.summary.by_tax_location.items %}<tr><th scope="row">{{ location }}</th><td class="number">{{ values.gross }}</td><td class="number">{{ values.discount }}</td><td class="number">{{ values.taxable }}</td><td class="number">{{ values.nontaxable }}</td><td class="number">{{ values.tax }}</td><td class="number">{{ values.total }}</td></tr>{% endfor %}</tbody></table>
+<table class="report-table"><caption>Tenders (card combines credit and debit; gift includes other tenders)</caption><tbody>{% for method, value in report.body.summary.tenders.items %}<tr><th scope="row">{{ method }}</th><td class="number">{{ value }}</td></tr>{% endfor %}</tbody></table>
+<p>Gross and discounts mirror Sales Tax, including signed returns. Returns is also shown separately for reference; it is already included in gross. Received excludes Account and Gift/Other. New Sale and the gross/returns split from Daily Totals are preserved in the downloaded file.</p>
+<p>{{ report.body.directory.customers|length }} account customers · {{ report.body.directory.vendors|length }} vendors · {{ report.body.commands|length }} command proposals · {{ report.body.summary.missing_cost_lines }} lines without recorded cost.</p>
+<details><summary>Generated commands and source document numbers</summary><pre>{{ report.command_json }}</pre></details>
+<details><summary>Source checks and estimates</summary><pre>{{ report.diagnostic_json }}</pre></details>
+<details><summary>Body checksum</summary><pre>{{ report.digest }}</pre></details>
+</section>{% endfor %}
+{% endblock %}

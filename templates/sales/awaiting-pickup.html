@@ -1,0 +1,58 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block extra_style %}<style>
+.awaiting-scroll{flex:1;min-height:0;overflow:auto;background:#fff}
+.awaiting-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0;padding:9px 12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf;border-top:1px solid #bdc6cf;font-size:15px;color:var(--brand-green);position:sticky;top:0;z-index:2}
+.awaiting-head .count{font-weight:normal;color:#586372;font-size:13px}
+.awaiting-table{width:100%;border-collapse:collapse}
+.awaiting-table th{top:38px;cursor:pointer;white-space:nowrap;user-select:none}
+.awaiting-table th.nosort{cursor:default}
+.awaiting-table td.number,.awaiting-table th.number{text-align:right}
+.awaiting-table tbody tr{cursor:pointer}
+.awaiting-table tbody tr:nth-child(even) td{background:var(--brand-surface)}
+.awaiting-table tbody tr:hover td{background:var(--brand-hover)}
+.awaiting-table td.items{white-space:normal;min-width:200px;max-width:380px}
+.awaiting-table td.notes{white-space:normal;max-width:220px;color:#555}
+.awaiting-table .pickup-form{margin:0}
+.awaiting-table .late{color:#8d2828;font-weight:bold}
+.awaiting-message{padding:8px 12px;background:#e7f5d6;color:#365424;border-bottom:1px solid #c1d4ac;font-size:13px}
+.awaiting-message.bad{background:#fff0ee;color:#923328;border-color:#e0ada5}
+.awaiting-empty{padding:26px 20px}
+.awaiting-section{margin-bottom:18px}
+</style>{% endblock %}{% block content %}
+{% if done %}<div class="awaiting-message" role="status">{{ done }} marked picked up.</div>{% endif %}{% if error %}<div class="awaiting-message bad" role="alert">{{ error }}</div>{% endif %}
+<div class="tools"><input type="search" id="awaiting-search" placeholder="Search number, customer, phone or item" aria-label="Search Awaiting Pickup" maxlength="100" style="flex:1;min-width:180px"><a class="button" href="/pos/history/?status=pickup">Sales History · Awaiting Pickup</a><a class="button" href="/pos/orders/">Order List</a></div>
+<div class="awaiting-scroll" id="awaiting-scroll">
+<section class="awaiting-section" id="awaiting-receipts" aria-labelledby="awaiting-receipts-title">
+<h2 class="awaiting-head" id="awaiting-receipts-title">Paid sales awaiting pickup <span class="count" data-count-for="receipts-table">{{ receipts|length }} receipt{{ receipts|length|pluralize }}</span></h2>
+{% if receipts %}<table class="awaiting-table" id="receipts-table"><thead><tr><th data-type="number">Receipt #</th><th data-type="date">Date Sold</th><th>Customer</th><th>Phone</th><th>Items</th><th data-type="date" aria-sort="ascending">Est. Pickup</th><th class="number" data-type="number">Days Waiting</th><th>Cashier</th><th>Notes</th><th class="nosort"></th></tr></thead><tbody>
+{% for row in receipts %}<tr data-href="/pos/sale/{{ row.doc.token }}/"><td data-sort="{{ row.doc.number_value|default:row.doc.source_number|default:0 }}"><a href="/pos/sale/{{ row.doc.token }}/">{{ row.number }}</a></td><td data-sort="{{ row.sold|date:'Y-m-d' }}">{{ row.sold|date:'n/j/Y' }}</td><td>{{ row.customer }}</td><td>{{ row.phone }}</td><td class="items">{{ row.items }}</td><td data-sort="{{ row.est|date:'Y-m-d'|default:'9999-12-31' }}"{% if row.est and row.est < today %} class="late"{% endif %}>{{ row.est|date:'n/j/Y'|default:'No date' }}</td><td class="number" data-sort="{{ row.days }}">{{ row.days }}</td><td>{{ row.cashier }}</td><td class="notes">{{ row.notes }}</td><td><form method="post" action="/pos/sale/{{ row.doc.token }}/pickup/" class="pickup-form" data-confirm="Mark {{ row.doc.numbered_label }} picked up by {{ row.customer }}{% if active_cashier %}, handed over by {{ active_cashier.name }}{% endif %}? No money, tax or stock changes.">{% csrf_token %}<input type="hidden" name="action" value="picked_up"><input type="hidden" name="version" value="{{ row.doc.version }}"><input type="hidden" name="next" value="awaiting"><button class="button primary" type="submit">Mark Picked Up</button></form></td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty awaiting-empty"><strong>Nothing is waiting for pickup.</strong>Tick Hold for Pickup when ringing a paid sale the customer will come back for.</div>{% endif %}
+</section>
+<section class="awaiting-section" id="awaiting-orders" aria-labelledby="awaiting-orders-title">
+<h2 class="awaiting-head" id="awaiting-orders-title">Sales orders ready for pickup <span class="count" data-count-for="orders-table">{{ orders|length }} order{{ orders|length|pluralize }}</span></h2>
+{% if orders %}<table class="awaiting-table" id="orders-table"><thead><tr><th data-type="number">Order #</th><th data-type="date">Order Date</th><th>Customer</th><th>Phone</th><th data-type="number">Ready</th><th>Items Ready</th><th data-type="date" aria-sort="ascending">Came In</th><th class="number" data-type="number">Days Waiting</th><th class="number" data-type="number">Balance Due</th><th class="number" data-type="number">Deposit Paid</th></tr></thead><tbody>
+{% for row in orders %}<tr data-href="/pos/order/{{ row.doc.token }}/"><td data-sort="{{ row.doc.number_value|default:row.doc.source_number|default:0 }}"><a href="/pos/order/{{ row.doc.token }}/">{{ row.number }}</a></td><td data-sort="{{ row.ordered|date:'Y-m-d' }}">{{ row.ordered|date:'n/j/Y' }}</td><td>{{ row.customer }}</td><td>{{ row.phone }}</td><td data-sort="{{ row.ready_qty }}">{{ row.ready }}</td><td class="items">{{ row.items }}</td><td data-sort="{{ row.came_in|date:'Y-m-d'|default:'9999-12-31' }}">{{ row.came_in|date:'n/j/Y'|default:'Unknown' }}</td><td class="number" data-sort="{{ row.days|default_if_none:'-1' }}">{{ row.days|default_if_none:'' }}</td><td class="number" data-sort="{{ row.balance }}">${{ row.balance|floatformat:2 }}</td><td class="number" data-sort="{{ row.paid }}">${{ row.paid|floatformat:2 }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty awaiting-empty"><strong>Nothing is waiting for pickup.</strong>Orders with Hold for Pickup ticked show here once their items come in on a receiving voucher.</div>{% endif %}
+</section>
+</div>
+<dialog id="confirm-dialog"><h2>Mark Picked Up</h2><form method="dialog"><p id="confirm-message"></p><div class="actions"><button class="button" value="cancel">Go Back</button><button class="button primary" value="confirm">Mark Picked Up</button></div></form></dialog>
+{% include "sales/pickup-confirm.html" %}
+<script>
+/* click a row to open it; click a heading to sort that table; the search box filters both tables. */
+(()=>{
+const scroll=document.getElementById('awaiting-scroll');
+scroll.addEventListener('click',e=>{const row=e.target.closest('tbody tr[data-href]');if(!row||e.target.closest('a,button,form,input,select'))return;location.href=row.dataset.href;});
+document.querySelectorAll('.awaiting-table').forEach(table=>{
+  const heads=[...table.tHead.rows[0].cells];
+  heads.forEach((th,i)=>{if(th.classList.contains('nosort'))return;th.title='Sort by '+th.textContent;th.addEventListener('click',()=>{
+    const dir=th.getAttribute('aria-sort')==='ascending'?-1:1;heads.forEach(h=>h.removeAttribute('aria-sort'));th.setAttribute('aria-sort',dir>0?'ascending':'descending');
+    const type=th.dataset.type||'text',body=table.tBodies[0];
+    const key=r=>{const c=r.cells[i];const v=c.dataset.sort??c.textContent.trim();return type==='number'?Number(v):v.toLowerCase();};
+    [...body.rows].sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*dir;}).forEach(r=>body.append(r));
+    heads.forEach(h=>h.textContent=h.textContent.replace(/ [↑↓]$/,''));th.textContent+=dir>0?' ↑':' ↓';
+  });});
+});
+const search=document.getElementById('awaiting-search');
+search.addEventListener('input',()=>{const q=search.value.trim().toLowerCase();document.querySelectorAll('.awaiting-table').forEach(table=>{let n=0;[...table.tBodies[0].rows].forEach(r=>{const hit=!q||r.textContent.toLowerCase().includes(q);r.hidden=!hit;if(hit)n++;});const c=document.querySelector('[data-count-for="'+table.id+'"]');if(c){const total=table.tBodies[0].rows.length,word=table.id==='orders-table'?'order':'receipt';c.textContent=(q?n+' of ':'')+total+' '+word+(total===1?'':'s');}});});
+})();
+</script>{% endblock %}

@@ -1,0 +1,51 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% load report_tags %}{% block extra_style %}<style>
+.report-options{display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf}
+.report-options .row{display:flex;flex-wrap:wrap;gap:14px;align-items:end}
+.report-options .field select{min-width:220px}.report-options .field.wide select{min-width:330px}.report-options .buttons{display:flex;gap:8px;align-items:center;margin-left:auto}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px}.checks .lead{color:#485365;font-size:12px;margin-right:4px}.checks label{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--brand-border);border-radius:3px;background:#fff;cursor:pointer;white-space:nowrap}.checks label:has(input:checked){background:var(--brand-tint);border-color:var(--brand-green)}.checks input{margin:0}
+.export-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px}.export-bar .label{margin-right:4px;color:#485365}.export-bar .summary{margin-left:auto;color:#485365}.export-bar select{padding:6px;min-width:200px;font:inherit;border:1px solid #aeb7c3;border-radius:2px;background:white}.export-bar .print-status{font-size:12px;color:#2f6b3f}.export-bar .print-status.bad{color:#923328}
+.report-table td,.report-table th{white-space:normal}.report-table .group td{background:var(--brand-tint)!important;font-weight:bold;color:var(--brand-green-dark)}.report-table .subtotal td{background:#f3f3f3!important;font-weight:bold;border-top:1px solid #aaa}.report-table .grand td{background:#fff!important;font-weight:bold;font-size:14px;border-top:2px solid var(--brand-green)}.report-table td.description{min-width:240px}.report-table tr.discounted td{color:#c00000}
+.report-note{padding:8px 12px;font-weight:bold;font-size:13px;background:#fff;border-top:1px solid #ccc}.report-note .mark{color:#c00000;font-weight:bold;font-size:15px}
+.report-heading{display:none}
+@media print{.report-heading{display:block;padding:8px 10px;font-size:13px}.export-bar,.report-options{display:none!important}}
+</style>{% endblock %}{% block task_shortcuts %}<a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/reports/sales-by-vendor/">Sales by Vendor</a><a class="shortcut" href="/reports/sales-tax/">Sales Tax</a><a class="shortcut" href="/">Home</a>{% endblock %}{% block content %}
+<form method="get" class="report-options" id="gs-options"><input type="hidden" name="submitted" value="1">
+<div class="row">
+<label class="field">Period<select name="period" id="period-kind"><option value="month" {% if period.kind == 'month' %}selected{% endif %}>Month</option><option value="quarter" {% if period.kind == 'quarter' %}selected{% endif %}>Sales Tax Quarter</option><option value="year" {% if period.kind == 'year' %}selected{% endif %}>Sales Tax Year</option><option value="custom" {% if period.kind == 'custom' %}selected{% endif %}>Custom Dates</option></select></label>
+<label class="field" data-kind="month">Month<select name="month">{% for value, label in months %}<option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field wide" data-kind="quarter">Quarter<select name="quarter">{% for value, label in quarters %}<option value="{{ value }}" {% if value == selected_quarter %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field wide" data-kind="year">Sales Tax Year<select name="year">{% for value, label in years %}<option value="{{ value }}" {% if value == selected_year %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field" data-kind="custom">From<input type="date" name="start" value="{{ custom_start|date:'Y-m-d' }}"></label>
+<label class="field" data-kind="custom">Through<input type="date" name="end" value="{{ custom_end|date:'Y-m-d' }}"></label>
+<label class="field">Group by<select name="group">{% for value, label in groupings %}<option value="{{ value }}" {% if value == group_by %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field">Items<select name="items"><option value="all" {% if include_noninventory %}selected{% endif %}>All catalog items</option><option value="inventory" {% if not include_noninventory %}selected{% endif %}>Inventory items only</option></select></label>
+<div class="buttons"><button class="button primary" name="run" value="1">Display Report</button><a class="button" href="/reports/general-sales/">Reset</a></div>
+</div>
+<div class="checks"><span class="lead">Columns</span>{% for c in optional_columns %}<label><input type="checkbox" name="cols" value="{{ c.key }}" {% if c.key in chosen %}checked{% endif %}>{{ c.label }}</label>{% endfor %}<span class="lead" style="margin-left:14px">Options</span><label><input type="checkbox" name="discounts" value="on" {% if highlight_discounts %}checked{% endif %}>Mark discounted lines in red</label><input type="hidden" name="discounts" value="off"></div>
+</form>
+{% if report %}
+<div class="export-bar" id="export-bar" data-print-url="/reports/general-sales/print/"><span class="label">Save as</span><a class="button" href="?{{ params }}&amp;format=xlsx">Excel</a><a class="button" href="?{{ params }}&amp;format=pdf">PDF</a><button class="button" type="button" id="direct-print" {% if not printers %}disabled title="No Letter printers are set up"{% endif %}>Direct Print</button><select id="report-printer" aria-label="Printer" {% if not printers %}disabled{% endif %}>{% for p in printers %}<option value="{{ p.pk }}" {% if selected_printer == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No Letter printers</option>{% endfor %}</select><span class="print-status" id="print-status" role="status" hidden></span><span class="summary">{{ report.subtitle }} · {{ report.receipts }} receipt{{ report.receipts|pluralize }} · {{ report.lines }} line{{ report.lines|pluralize }}</span></div>
+<form id="print-options" hidden>{% csrf_token %}<input type="hidden" name="submitted" value="1"><input type="hidden" name="period" value="{{ period.kind }}"><input type="hidden" name="month" value="{{ selected_month }}"><input type="hidden" name="quarter" value="{{ selected_quarter }}"><input type="hidden" name="year" value="{{ selected_year }}"><input type="hidden" name="start" value="{{ period.start|date:'Y-m-d' }}"><input type="hidden" name="end" value="{{ period.end|date:'Y-m-d' }}"><input type="hidden" name="group" value="{{ group_by }}"><input type="hidden" name="items" value="{% if include_noninventory %}all{% else %}inventory{% endif %}"><input type="hidden" name="discounts" value="{% if highlight_discounts %}on{% else %}off{% endif %}">{% for k in chosen %}<input type="hidden" name="cols" value="{{ k }}">{% endfor %}</form>
+<div class="report-heading"><strong>{{ business.name }} — {{ report.title }}</strong><br>{{ report.subtitle }}</div>
+<div class="table-scroll"><table class="report-table"><thead><tr>{% for c in report.columns %}<th{% if c.kind == 'qty' or c.kind == 'money' %} class="number"{% endif %}>{{ c.label }}</th>{% endfor %}</tr></thead><tbody>
+{% for g in report.groups %}{% if report.grouped %}<tr class="group"><td colspan="{{ report.columns|length }}">{{ g.label }}</td></tr>{% endif %}
+{% for r in g.rows %}<tr{% if r.discounted %} class="discounted"{% endif %}>{% for c in report.columns %}{% if c.kind == 'date' %}<td>{{ r.date|date:'n/j/Y' }}</td>{% elif c.kind == 'qty' %}<td class="number">{{ r.quantity|qty }}</td>{% elif c.kind == 'money' %}<td class="number">{% cell r c %}</td>{% elif c.key == 'description' %}<td class="description">{{ r.description }}</td>{% else %}<td>{% cell r c %}</td>{% endif %}{% endfor %}</tr>{% endfor %}
+{% if report.grouped %}<tr class="subtotal">{% total_row report g.totals "Total "|add:g.label %}</tr>{% endif %}
+{% endfor %}
+{% if report.lines %}<tr class="grand">{% total_row report report.totals "Grand total" %}</tr>{% endif %}
+</tbody></table>{% if report.discounted_lines %}<div class="report-note"><span class="mark">*</span> Sold at Discounted Price</div>{% endif %}{% if not report.lines %}<div class="empty"><strong>No sales in this period</strong>Widen the dates or include all catalog items.</div>{% endif %}</div>
+{% elif not ran %}
+<div class="empty"><strong>General Sales</strong>Items sold on completed sales receipts for a month, sales tax quarter or year, or your own dates. Tick the columns you want, choose a grouping, then Display Report.</div>
+{% endif %}
+{% endblock %}{% block scripts %}<script>
+(()=>{const kind=document.getElementById('period-kind');const fields=document.querySelectorAll('#gs-options [data-kind]');const apply=()=>fields.forEach(f=>{f.hidden=f.dataset.kind!==kind.value;});kind.addEventListener('change',apply);apply();})();
+</script>{% if report %}<script>
+(()=>{const bar=document.getElementById('export-bar'),button=document.getElementById('direct-print'),select=document.getElementById('report-printer'),status=document.getElementById('print-status'),form=document.getElementById('print-options');
+if(!button||button.disabled)return;const show=(text,bad)=>{status.textContent=text;status.hidden=false;status.classList.toggle('bad',!!bad);};
+button.addEventListener('click',async()=>{const body=new URLSearchParams(new FormData(form));body.set('printer',select.value);button.disabled=true;show('Sending to '+select.options[select.selectedIndex].text+'…');
+ try{const r=await fetch(bar.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrfmiddlewaretoken]').value},body});
+  const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);}
+ catch{show('Could not reach the app server. Check the connection before retrying.',true);}
+ finally{button.disabled=false;}});})();
+</script>{% endif %}{% endblock %}

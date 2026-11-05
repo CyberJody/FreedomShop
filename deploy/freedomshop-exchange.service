@@ -1,0 +1,17 @@
+# Example only. Adjust paths/user and grant outbox access before enabling manually.
+[Unit]
+Description=FreedomShop daily FreedomBooks exchange
+
+[Service]
+Type=oneshot
+User=freedomshop
+Group=freedomshop
+WorkingDirectory=/opt/freedomshop/current
+ExecStart=/opt/freedomshop/venv/bin/python manage.py export_exchange --pending --collect-acks
+Environment=DJANGO_SETTINGS_MODULE=config.settings
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/freedomshop

@@ -1,0 +1,19 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "printers/base.html" %}{% block content %}{% if message %}<div class="success" role="status">Printer saved.</div>{% endif %}<div id="error" class="error" role="alert" hidden></div><div id="print-message" class="notice" role="status" hidden></div>
+<div class="tools"><a class="want" href="/printers/new/">Add Printer</a><form class="list-search" method="get"><select name="status" aria-label="Status"><option value="active" {% if status == 'active' %}selected{% endif %}>Active</option><option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option><option value="all" {% if status == 'all' %}selected{% endif %}>All</option></select><button class="button">Show</button></form><button class="button" type="button" id="refresh-status">Refresh Status</button></div>
+<div class="table-scroll"><table><thead><tr><th>Printer Name</th><th>Type</th><th>Model</th><th>Location</th><th>Address</th><th>MAC Address</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>{% for printer in printers %}<tr><td><a href="/printers/{{ printer.pk }}/">{{ printer.name }}</a>{% if not printer.active %} (inactive){% endif %}</td><td>{{ printer.get_kind_display }}</td><td>{{ printer.model }}</td><td>{{ printer.location }}</td><td>{{ printer.host }}:{{ printer.port }}</td><td>{{ printer.mac_address }}</td><td>{% if printer.active %}<span class="printer-status" data-status-url="/printers/{{ printer.pk }}/status/">Checking…</span>{% else %}<span class="printer-status">Inactive (not checked)</span>{% endif %}</td><td class="no-print"><div class="printer-actions">{% if printer.active %}<button class="button" type="button" data-test-url="/printers/{{ printer.pk }}/test/" data-name="{{ printer.name }}">Test Print</button>{% endif %}<a class="button" href="/printers/{{ printer.pk }}/">Edit</a></div></td></tr>{% empty %}<tr><td colspan="8">No printers. Use Add Printer.</td></tr>{% endfor %}</tbody></table></div>
+<div class="notice">The server sends receipts straight to each printer over the store network (no Windows print dialog). Status connects to the printer without printing.</div><form hidden>{% csrf_token %}</form>
+{% endblock %}
+{% block scripts %}<script>
+(()=>{const $=id=>document.getElementById(id);
+async function refresh(){for(const el of document.querySelectorAll('[data-status-url]')){el.textContent='Checking…';el.className='printer-status';try{const r=await fetch(el.dataset.statusUrl,{headers:{'Accept':'application/json'}});const d=await r.json();el.textContent=d.status;el.classList.add(d.ok?'ok':'bad');}catch{el.textContent='Unknown';el.classList.add('bad');}}}
+$('refresh-status').addEventListener('click',refresh);refresh();
+document.querySelectorAll('[data-test-url]').forEach(button=>button.addEventListener('click',async()=>{
+ button.disabled=true;$('error').hidden=true;$('print-message').hidden=true;
+ try{const r=await fetch(button.dataset.testUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value}});
+  const d=await r.json().catch(()=>({error:'The test print request failed. Reload the page and try again.'}));
+  if(!r.ok){$('error').textContent=d.error||'The test print failed.';$('error').hidden=false;}else{$('print-message').textContent=d.message;$('print-message').hidden=false;}}
+ catch{$('error').textContent='Could not reach the app server.';$('error').hidden=false;}
+ finally{button.disabled=false;}}));
+})();
+</script>{% endblock %}

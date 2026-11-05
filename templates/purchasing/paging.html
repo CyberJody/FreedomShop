@@ -1,0 +1,2 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<div class="paging"><span class="count">{{ page.paginator.count }} record{{ page.paginator.count|pluralize }}{% if page.object_list %} · {{ page.start_index }}–{{ page.end_index }} shown{% endif %}</span>{% if page.has_previous %}<a href="?{{ params }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}<span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{{ params }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}</div>

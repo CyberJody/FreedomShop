@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Shop data: databases, dumps, uploads and backups never belong in the repository
+*.sqlite3
+*.db
+*.dump
+uploads/
+media/
+backups/
+data/
+# Build output
+dist/

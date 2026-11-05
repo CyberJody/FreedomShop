@@ -1,0 +1,12 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}
+{% block task_shortcuts %}<a class="shortcut" href="/settings/business/">Business Settings</a><a class="shortcut" href="/settings/tax/">Tax Settings</a><a class="shortcut" href="/printers/">Printers</a><a class="shortcut" href="/server-status/">Server Status</a>{% if admin_mode %}<a class="shortcut" href="/settings/migrate-quickbooks/">Migrate from QuickBooks POS</a><a class="shortcut" href="/setup/">Run setup again</a>{% endif %}{% endblock %}
+{% block extra_style %}<style>
+.settings-wrap{overflow:auto;padding:12px 14px;flex:1}.settings-panel{border:1px solid #c9d1da;border-radius:4px;margin:0 0 16px;padding:12px 14px;background:#fff}
+.settings-panel h2{font-size:16px;margin:0 0 10px}.settings-grid{max-width:900px;display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px 16px}
+.settings-grid label{display:block;font-size:13px;margin-bottom:4px}.settings-grid input:not([type=checkbox]),.settings-grid select,.settings-grid textarea{width:100%;box-sizing:border-box;font:inherit;padding:5px}
+.settings-table{border-collapse:collapse;width:100%}.settings-table th,.settings-table td{padding:5px 6px;border-bottom:1px solid #e1e6ec;text-align:left;vertical-align:middle}
+.settings-table input:not([type=checkbox]){width:100%;box-sizing:border-box;font:inherit;padding:4px}.settings-table .num{width:6em}.settings-table .actions{display:flex;gap:6px;flex-wrap:wrap}
+.settings-table tr.retired td{color:#7a8592}.helptext{display:block;color:#5b6573;font-size:12px;margin-top:3px}.success{background:#e7f5d6;color:#365424;padding:10px 12px;margin-bottom:12px}
+.error{color:#a12b2b}.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:3px;background:#e7ecf2;margin-left:4px}.readonly{color:#485365}
+@media(max-width:620px){.settings-grid{grid-template-columns:1fr}}</style>{% endblock %}

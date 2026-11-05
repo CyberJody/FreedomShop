@@ -1,0 +1,9 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<div class="item-field{% if entry.checkbox and not readonly %} item-check{% endif %}">
+{% if readonly %}
+  <span class="item-label">{{ entry.label }}</span><span class="read-value{% if not entry.known %} unverified{% endif %}">{% if entry.known %}{{ entry.value|default:'—' }}{% else %}Unverified{% endif %}</span>
+{% else %}
+  {% if entry.checkbox %}{{ entry.field }}{{ entry.field.label_tag }}{% else %}{{ entry.field.label_tag }}{{ entry.field }}{% endif %}
+  {{ entry.field.errors }}{% if entry.field.help_text %}<small>{{ entry.field.help_text }}</small>{% endif %}
+{% endif %}
+</div>

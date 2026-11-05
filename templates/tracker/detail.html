@@ -1,0 +1,23 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block task_shortcuts %}{% for url, label in shortcuts %}<a class="shortcut" href="{{ url }}">{{ label }}</a>{% endfor %}{% endblock %}{% block content %}{% include "tracker/style.html" %}
+{% if message %}<div class="saved-message" role="status">{{ message }}</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+<div class="fx-head"><div><h2><span class="fx-num">{{ req.number }}</span> {{ req.title }}</h2>
+<div class="meta"><span class="fx-badge {{ req.status }}">{{ req.get_status_display }}</span><span class="fx-kind {{ req.kind }}"><strong>{{ req.get_kind_display }}</strong></span><span>Opened by {{ req.created_by|default:"—" }} on {{ req.created_at|date:'n/j/Y g:i A' }}</span><span>Last activity {{ req.updated_at|date:'n/j/Y g:i A' }}</span></div>
+{% if req.details %}<p class="details">{{ req.details }}</p>{% endif %}</div>
+<form method="post" class="fx-status" id="status-form">{% csrf_token %}<input type="hidden" name="action" value="status"><label for="status-select">Status</label><select id="status-select" name="status">{% for value, label in statuses %}<option value="{{ value }}" {% if value == req.status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="button" type="submit">Save</button></form>{% if req.status == 'done' %}<form method="post" class="fx-status" id="reopen-form">{% csrf_token %}<input type="hidden" name="action" value="status"><input type="hidden" name="status" value="open"><button class="button" type="submit">Reopen</button></form>{% endif %}</div>
+<div class="fx-body">
+<div class="fx-notes" id="notes"><h3>Notes</h3>
+{% for note in notes %}<div class="fx-note"><div class="who"><strong>{{ note.author|default:"—" }}</strong> · {{ note.created_at|date:'n/j/Y g:i A' }}</div>{% if note.text %}<div class="text">{{ note.text }}</div>{% endif %}{% if note.attachments.all %}<div class="fx-files">{% for file in note.attachments.all %}{% include "tracker/file.html" %}{% endfor %}</div>{% endif %}</div>
+{% empty %}<div class="notice" style="border:0;background:none">No notes yet. Add the first one below.</div>{% endfor %}
+<form method="post" enctype="multipart/form-data" class="fx-form" id="note-form"><h3>Add a note</h3>{% if req.status == 'done' %}<p class="fx-hint">This one is closed — notes are still welcome; if something is wrong, add a note and press Reopen.</p>{% endif %}{% csrf_token %}<input type="hidden" name="action" value="note">
+<label class="field">Note<textarea name="text" maxlength="5000" placeholder="What happened, what you expected, or an update">{{ form.text }}</textarea></label>
+<div class="row"><label class="field">Your name<input name="name" value="{{ form.name }}" maxlength="80" placeholder="Who is writing this"></label><label class="field">Attach a file (screenshot, video, PDF; up to {{ max_upload }})<input type="file" name="file" accept="{{ accept_files }}"><span class="hint">A note can be just a file.</span></label></div>
+<div class="actions"><button class="button primary" type="submit">Add Note</button></div></form>
+</div>
+<div class="fx-side"><h3>Files</h3>
+{% if req.attachments.all %}<div class="fx-files">{% for file in req.attachments.all %}{% include "tracker/file.html" %}{% endfor %}</div>{% else %}<div class="notice" style="border:0;background:none;padding:0">No files yet. Attach a screenshot with a note.</div>{% endif %}
+<h3 style="margin-top:16px">Details</h3><dl class="meta" style="font-size:13px;margin:0"><dt style="color:#586372">Kind</dt><dd style="margin:0 0 6px">{{ req.get_kind_display }}</dd><dt style="color:#586372">Status</dt><dd style="margin:0 0 6px">{{ req.get_status_display }}</dd><dt style="color:#586372">Request #</dt><dd style="margin:0">{{ req.number }}</dd></dl>
+</div>
+</div>
+{% endblock %}

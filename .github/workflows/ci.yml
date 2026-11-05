@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FREEDOMSHOP_TEST_DB_HOST: 127.0.0.1
+      FREEDOMSHOP_TEST_DB_USER: postgres
+      FREEDOMSHOP_TEST_DB_PASSWORD: test-only-password
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # The byte-for-byte print comparison runs only where its reference commit exists.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-calc fonts-dejavu-core
+          pip install -r requirements.lock
+          pip install -r requirements-test.txt
+      - name: Shell syntax
+        run: |
+          for script in install.sh release.sh deploy/freedomshop.sh deploy/docker-entrypoint.sh; do
+            bash -n "$script"
+          done
+      - name: SQLite tests
+        run: python manage.py test --settings=config.test_settings --noinput
+      - name: PostgreSQL tests
+        run: python manage.py test --settings=config.postgres_test_settings --noinput
+      - name: Migration drift
+        run: python manage.py makemigrations --check --dry-run --settings=config.test_settings
+      - name: Compile Python
+        run: python -m compileall -q accounts config customers deploy freedomshop purchasing reports sales shop_settings tags tools tracker manage.py
+      - name: Installer plan
+        run: ./install.sh --dry-run --allowed-hosts shop.example.com
+      - name: Publication scan
+        run: python tools/public_scan.py

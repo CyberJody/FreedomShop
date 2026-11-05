@@ -1,0 +1,7 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "setup/base.html" %}
+{% block step %}<h1>Live shop?</h1>
+<p class="setup-note">While you try things out, printouts carry black “testing” bars so nobody mistakes them for real receipts. Tick the box when this is the shop you sell from.</p>
+<form method="post">{% csrf_token %}<div class="setup-grid">{% include "setup/field.html" with field=form.live wide=True %}</div>
+<div class="setup-actions"><a class="setup-button" href="{{ back }}">Back</a><span class="spacer"></span><button class="setup-button primary">Finish setup</button></div></form>
+{% endblock %}

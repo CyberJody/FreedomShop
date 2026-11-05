@@ -1,0 +1,63 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<style>
+.zt{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;padding:12px;font-family:inherit}
+.zt-fields{display:grid;gap:9px;min-width:280px;flex:1;max-width:460px}
+.zt-fields label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#485365}
+.zt-fields input,.zt-fields select{font-size:15px;padding:6px;border:1px solid #aeb7c3;border-radius:2px;background:white}
+.zt-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.zt-row label{flex:1}
+.zt-copies input{width:64px}
+.zt-preview{display:flex;flex-direction:column;gap:6px;align-items:center}
+.zt-preview .zt-paper{width:300px;height:406px;border:1px dashed #9aa5b1;background:white;box-shadow:2px 3px 8px #0002;position:relative}
+.zt-preview img{width:300px;height:406px;display:block;image-rendering:auto}
+.zt-preview .zt-hint{font-size:11px;color:#626b75;max-width:300px;text-align:center}
+.zt-status{font-size:13px;color:#2f6b3f;min-height:1.2em}.zt-status.bad{color:#923328}
+.zt-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.zt-actions button{padding:8px 14px;border-radius:3px;border:1px solid #6b8f73;background:linear-gradient(#fff,#eef4ea);cursor:pointer}
+.zt-actions button.primary{background:#2f6b3f;color:white;font-weight:bold;border-color:#245431}
+.zt-actions button:disabled{color:#777;background:#ddd;cursor:default}
+</style>
+<form class="zt" id="zebra-tag" data-preview-url="/tags/item-tag/preview.png" action="{{ print_url }}" method="post" autocomplete="off">{% csrf_token %}
+{% if item %}<input type="hidden" name="item" value="{{ item.pk }}">{% endif %}
+<div class="zt-fields">
+<label>Name<input name="name" maxlength="120" value="{{ tag_text.name }}" data-default="{{ tag_text.name }}"></label>
+<label>Item code line<input name="code" maxlength="80" value="{{ tag_text.code }}" data-default="{{ tag_text.code }}"></label>
+<label>Wood<input name="wood" maxlength="80" value="{{ tag_text.wood }}" data-default="{{ tag_text.wood }}"></label>
+<label>Size<input name="size" maxlength="80" value="{{ tag_text.size }}" data-default="{{ tag_text.size }}"></label>
+<label>Price<input name="price" maxlength="20" value="{{ tag_text.price }}" data-default="{{ tag_text.price }}" placeholder="$0.00"></label>
+<div class="zt-row"><label>Tag printer<select name="printer" id="zt-printer" {% if not label_printers %}disabled{% endif %}>{% for p in label_printers %}<option value="{{ p.pk }}" {% if label_printer == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No tag printer set up (File &gt; Printers)</option>{% endfor %}</select></label>
+<label class="zt-copies">Copies<input name="copies" type="number" min="1" max="10" step="1" value="1" required></label></div>
+<div class="zt-actions"><button type="submit" class="primary" {% if not label_printers %}disabled{% endif %}>Print Tag</button>{% if item %}<button type="button" id="zt-reset">Reset to Item List</button>{% endif %}</div>
+<p class="zt-status" id="zt-status" role="status" aria-live="polite"></p>
+<p class="zt-hint" style="font-size:11px;color:#626b75">Changes here are for this print only; the item in the Item List is not changed.</p>
+</div>
+<div class="zt-preview"><div class="zt-paper"><img id="zt-image" alt="Tag preview" src="/tags/item-tag/preview.png?{{ preview_query }}"></div>
+<span class="zt-hint">Exactly what prints: a 3 × 4 in tag, perforations at the sides. The circle marks where the "Made in the USA" sticker goes.</span></div>
+</form>
+<script>
+(()=>{
+ const form=document.getElementById('zebra-tag'),img=document.getElementById('zt-image'),status=document.getElementById('zt-status'),printer=document.getElementById('zt-printer');
+ const fields=['name','code','wood','size','price'].map(n=>form.elements[n]);
+ const show=(t,bad)=>{status.textContent=t||'';status.classList.toggle('bad',!!bad);};
+ let timer,seq=0,current='';
+ async function refresh(){
+  const query=new URLSearchParams(fields.map(f=>[f.name,f.value])).toString();
+  if(query===current)return; const mine=++seq;
+  try{const r=await fetch(form.dataset.previewUrl+'?'+query);if(mine!==seq)return;
+   if(!r.ok){show(await r.text(),true);return;}
+   const old=img.src;img.src=URL.createObjectURL(await r.blob());if(old.startsWith('blob:'))URL.revokeObjectURL(old);current=query;show('');}
+  catch(_){if(mine===seq)show('Preview is unavailable. Check the connection.',true);}
+ }
+ form.addEventListener('input',e=>{if(fields.includes(e.target)){clearTimeout(timer);timer=setTimeout(refresh,300);}});
+ const reset=document.getElementById('zt-reset');if(reset)reset.onclick=()=>{fields.forEach(f=>f.value=f.dataset.default);refresh();};
+ try{const saved=localStorage.getItem('labelPrinter');if(printer&&[...printer.options].some(o=>o.value===saved))printer.value=saved;}catch(_){}
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();clearTimeout(timer);await refresh();
+  const button=form.querySelector('button[type=submit]');button.disabled=true;show('Sending tag…');
+  try{const r=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{'X-CSRFToken':form.elements.csrfmiddlewaretoken.value}});
+   const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);
+   if(r.ok){try{localStorage.setItem('labelPrinter',printer.value);}catch(_){}}}
+  catch(_){show('Could not confirm printing. Check the printer before trying again.',true);}
+  finally{button.disabled=false;}
+ });
+})();
+</script>

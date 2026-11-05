@@ -1,0 +1,38 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% load report_tags %}{% block extra_style %}<style>
+.report-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,max-content));gap:14px;align-items:end;padding:12px;background:var(--brand-surface);border-bottom:1px solid #bdc6cf}
+.report-options .field select{min-width:240px}.report-options .buttons{display:flex;gap:8px;align-items:center}.report-options .asof{font-size:13px;color:#485365;padding-bottom:8px}
+.export-bar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#eee;border-bottom:1px solid #ccc;font-size:13px}.export-bar .label{margin-right:4px;color:#485365}.export-bar .summary{margin-left:auto;color:#485365}.export-bar select{padding:6px;min-width:200px;font:inherit;border:1px solid #aeb7c3;border-radius:2px;background:white}.export-bar .print-status{font-size:12px;color:#2f6b3f}.export-bar .print-status.bad{color:#923328}
+.report-table td,.report-table th{white-space:normal}.report-table .group td{background:var(--brand-tint)!important;font-weight:bold;color:var(--brand-green-dark)}.report-table .subtotal td{background:#f3f3f3!important;font-weight:bold;border-top:1px solid #aaa}.report-table .grand td{background:#fff!important;font-weight:bold;font-size:14px;border-top:2px solid var(--brand-green)}.report-table .description{min-width:260px}.report-table td.negative{color:#c00000}
+.report-note{padding:8px 12px;font-size:12px;color:#485365;background:#fff;border-top:1px solid #ccc;line-height:1.6}
+.report-heading{display:none}
+@media print{.report-heading{display:block;padding:8px 10px;font-size:13px}.export-bar,.report-options{display:none!important}}
+</style>{% endblock %}{% block task_shortcuts %}<a class="shortcut" href="/reports/">Reports</a><a class="shortcut" href="/customers/">Customer List</a><a class="shortcut" href="/">Home</a>{% endblock %}{% block content %}
+<form method="get" class="report-options">
+<label class="field">Show<select name="show">{% for key, label in show_choices %}<option value="{{ key }}" {% if key == show %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field">Sort<select name="sort">{% for key, label in sort_choices %}<option value="{{ key }}" {% if key == sort %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field" style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px"><input type="checkbox" name="charge" value="1" {% if charge_only %}checked{% endif %}> Charge-account customers only</label>
+<div class="buttons"><button class="button primary" name="run" value="1">Display Report</button><a class="button" href="/reports/customer-balances/">Reset</a></div>
+</form>
+{% if report %}
+<div class="export-bar" id="export-bar" data-print-url="/reports/customer-balances/print/"><span class="label">Save as</span><a class="button" href="?{{ params }}&amp;format=xlsx">Excel</a><a class="button" href="?{{ params }}&amp;format=pdf">PDF</a><button class="button" type="button" id="direct-print" {% if not printers %}disabled title="No Letter printers are set up"{% endif %}>Direct Print</button><select id="report-printer" aria-label="Printer" {% if not printers %}disabled{% endif %}>{% for p in printers %}<option value="{{ p.pk }}" {% if selected_printer == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% empty %}<option value="">No Letter printers</option>{% endfor %}</select><span class="print-status" id="print-status" role="status" hidden></span><span class="summary">{{ report.customers }} customer{{ report.customers|pluralize }} · {{ report.totals.balance|dollars }}</span></div>
+<form id="print-options" hidden>{% csrf_token %}<input type="hidden" name="show" value="{{ show }}"><input type="hidden" name="sort" value="{{ sort }}">{% if charge_only %}<input type="hidden" name="charge" value="1">{% endif %}</form>
+<div class="report-heading"><strong>{{ business.name }} — {{ report.title }}</strong><br>{{ report.subtitle }}</div>
+<div class="table-scroll"><table class="report-table"><thead><tr><th>Customer</th><th>Phone</th><th>City</th><th>Customer #</th><th>Charge Acct</th><th>Last Sale</th><th class="number">Account Limit</th><th class="number">Account Balance</th><th></th></tr></thead><tbody>
+{% for g in report.groups %}{% for r in g.rows %}<tr><td><a href="/customers/?customer={{ r.pk }}#customer-details">{{ r.customer }}</a></td><td>{{ r.phone }}</td><td>{{ r.city }}</td><td>{{ r.customer_number }}</td><td>{{ r.charge }}</td><td>{{ r.last_sale }}</td><td class="number">{% if r.limit %}{{ r.limit|dollars }}{% endif %}</td><td class="number{% if r.balance < 0 %} negative{% endif %}">{{ r.balance|dollars }}</td><td><a class="button" style="padding:2px 8px;font-size:12px" href="/pos/sale/new/?customer={{ r.pk }}&amp;account_payment=1">Take Payment</a></td></tr>{% endfor %}{% endfor %}
+<tr class="grand"><td colspan="7">Total · {{ report.customers }} customer{{ report.customers|pluralize }}</td><td class="number">{{ report.totals.balance|dollars }}</td><td></td></tr>
+</tbody></table>
+<div class="report-note">{{ report.subtitle }}. Owed ${{ report.owed|floatformat:2 }} · credits ${{ report.credit|floatformat:2 }} (shown in red). Balances are the QuickBooks POS balance at the time of the backup plus charges and payments on account entered in this app.</div>
+{% if not report.customers %}<div class="empty"><strong>No customers with a balance</strong></div>{% endif %}</div>
+{% elif not ran %}
+<div class="empty"><strong>Customer Balances</strong>Customers with an account balance (owed or credit), with phone, last sale, account limit and totals. Choose what to show, then Display Report.</div>
+{% endif %}
+{% endblock %}{% block scripts %}{% if report %}<script>
+(()=>{const bar=document.getElementById('export-bar'),button=document.getElementById('direct-print'),select=document.getElementById('report-printer'),status=document.getElementById('print-status'),form=document.getElementById('print-options');
+if(!button||button.disabled)return;const show=(text,bad)=>{status.textContent=text;status.hidden=false;status.classList.toggle('bad',!!bad);};
+button.addEventListener('click',async()=>{const body=new URLSearchParams(new FormData(form));body.set('printer',select.value);button.disabled=true;show('Sending to '+select.options[select.selectedIndex].text+'…');
+ try{const r=await fetch(bar.dataset.printUrl,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrfmiddlewaretoken]').value},body});
+  const d=await r.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));show(d.error||d.message,!r.ok);}
+ catch{show('Could not reach the app server. Check the connection before retrying.',true);}
+ finally{button.disabled=false;}});})();
+</script>{% endif %}{% endblock %}

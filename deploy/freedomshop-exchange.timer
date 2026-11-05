@@ -1,0 +1,11 @@
+# Example only; no units are installed or enabled by this repository.
+[Unit]
+Description=Export closed FreedomShop days nightly
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+Unit=freedomshop-exchange.service
+
+[Install]
+WantedBy=timers.target

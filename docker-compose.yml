@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# cp .env.example .env; set the secret key, database password and allowed hosts.
+# docker compose up --build -d
+# The app entrypoint runs migrate and collectstatic before starting gunicorn.
+# docker compose run --rm app manage.py setup [setup options]
+# Interactive setup is also available at /setup/.
+# Optional HTTP proxy: docker compose --profile nginx up -d
+# Native freedomshop backup/restore manages native installs; for containers, save
+# pg_dump -Fc from db plus the app-data volume and .env before upgrading images.
+name: freedomshop
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: freedomshop
+      POSTGRES_USER: freedomshop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U freedomshop -d freedomshop']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      FREEDOMSHOP_SECRET_KEY: ${FREEDOMSHOP_SECRET_KEY:?Set FREEDOMSHOP_SECRET_KEY in .env}
+      FREEDOMSHOP_ALLOWED_HOSTS: ${FREEDOMSHOP_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      FREEDOMSHOP_DB_HOST: db
+      FREEDOMSHOP_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      FREEDOMSHOP_HTTPS: ${FREEDOMSHOP_HTTPS:-0}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${FREEDOMSHOP_BIND_ADDRESS:-127.0.0.1}:${FREEDOMSHOP_PORT:-8001}:8001"
+    volumes:
+      - app-data:/var/lib/freedomshop
+    healthcheck:
+      test: [CMD, python, /app/deploy/healthcheck.py]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+  nginx:
+    image: nginx:stable
+    profiles: [nginx]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${FREEDOMSHOP_BIND_ADDRESS:-127.0.0.1}:${FREEDOMSHOP_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./deploy/nginx-compose.conf:/etc/nginx/conf.d/default.conf:ro
+      - app-data:/var/lib/freedomshop:ro
+volumes:
+  postgres-data:
+  app-data:

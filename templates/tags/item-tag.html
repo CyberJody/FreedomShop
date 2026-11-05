@@ -1,0 +1,17 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block task_shortcuts %}<a class="shortcut" href="/tags/">Tag Generator</a><a class="shortcut" href="/tags/item-tag/">New Item Tag</a><a class="shortcut" href="/tags/furniture-sets/new/">New Furniture Set Tag</a><a class="shortcut" href="/purchasing/items/">Item List</a>{% endblock %}{% block content %}
+<div class="tools"><div class="lookup"><label class="field">{% if item %}Choose another item{% else %}Choose the item for the tag{% endif %}<input id="item-search" type="search" placeholder="Scan or enter item name, number or description" autocomplete="off" maxlength="100" {% if not item %}autofocus{% endif %}></label><div id="item-results" class="results"></div></div>{% if item %}<span>Item <a href="/purchasing/items/{{ item.pk }}/">{{ item.sku }}</a> · {{ item.display_name }}</span>{% endif %}</div>
+{% if missing %}<div class="error" role="alert">That item is not in the Item List (or is in the Items Trash). Choose another item.</div>{% endif %}
+{% if item and not item.print_tags %}<div class="error" role="alert">Print Tags is off for this item. Enable it in Edit Item before printing.</div>{% endif %}
+<div class="notice">Zebra tag printer only. The text is filled in from the Item List; change anything before printing. Furniture Set Tags print on the Letter printers from their own page.</div>
+{% include "tags/item-tag-editor.html" %}
+<script>
+(()=>{
+ const search=document.getElementById('item-search'),results=document.getElementById('item-results');let timer,seq=0;
+ search.addEventListener('input',()=>{clearTimeout(timer);const q=search.value.trim();if(!q){results.replaceChildren();return;}timer=setTimeout(async()=>{const mine=++seq;
+  try{const r=await fetch('/pos/lookup/items/?q='+encodeURIComponent(q));const d=await r.json();if(mine!==seq)return;
+   results.replaceChildren(...(d.results.length?d.results.map(item=>{const b=document.createElement('button');b.type='button';b.textContent=item.label;const s=document.createElement('small');s.textContent=[item.sku,item.description,item.price?('$'+Number(item.price).toFixed(2)):'No price'].filter(Boolean).join(' · ');b.append(s);b.onclick=()=>{location.href='/tags/item-tag/?item='+encodeURIComponent(item.id);};return b;}):[Object.assign(document.createElement('p'),{textContent:'No matching items.'})]));
+  }catch(e){results.replaceChildren(Object.assign(document.createElement('p'),{textContent:'Item search is unavailable. Check the connection.'}));}},200);});
+ search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();results.querySelector('button')?.click();}if(e.key==='Escape')results.replaceChildren();});
+})();
+</script>{% endblock %}

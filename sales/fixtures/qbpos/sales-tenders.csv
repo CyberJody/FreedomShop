@@ -1,0 +1,3 @@
+Receipt #,Date,Customer,Qty,Item,Price,Ext Price,Tax,Tender,Tender Amount
+600,2025-01-15,Alex Example,1,Maple Chair,120.00,120.00,8.40,Cash,155.15
+600,2025-01-15,Alex Example,1,Delivery,25.00,25.00,1.75,Cash,155.15

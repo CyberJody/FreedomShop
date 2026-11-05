@@ -1,0 +1,12 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "sales/base.html" %}{% block task_shortcuts %}{% for url, label in shortcuts %}<a class="shortcut" href="{{ url }}">{{ label }}</a>{% endfor %}{% endblock %}{% block content %}{% include "tracker/style.html" %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" enctype="multipart/form-data" class="fx-new" id="new-request-form">{% csrf_token %}
+<label class="field">Title *<input name="title" value="{{ form.title }}" maxlength="200" required placeholder="A short name for the fix or request" autofocus></label>
+<label class="field">Kind<select name="kind">{% for value, label in kinds %}<option value="{{ value }}" {% if value == form.kind %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="field">Details<textarea name="details" maxlength="10000" placeholder="What is wrong or what you would like the app to do; which screen; an example">{{ form.details }}</textarea></label>
+<label class="field">Your name<input name="name" value="{{ form.name }}" maxlength="80" placeholder="So we know who to ask"></label>
+<label class="field">Attach a file (screenshot, video, PDF; up to {{ max_upload }})<input type="file" name="file" accept="{{ accept_files }}"></label>
+<div class="actions"><button class="button primary" type="submit">Add to the List</button><a class="button" href="/fixes/">Cancel</a></div>
+</form>
+{% endblock %}

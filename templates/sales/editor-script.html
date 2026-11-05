@@ -1,0 +1,691 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<script>
+(() => {
+'use strict';
+const state = JSON.parse(document.getElementById('document-data').textContent);
+const DEFAULT_TAX_RATE = '{{ shop_tax.line_rate_text|escapejs }}';  // last fallback rate for a new line (Tax Settings)
+const readonly = state.imported === true || state.readonly === true; // imported QB documents and locked past-day receipts
+let dirty = false, busy = false, payment = state.payments?.[0]?.method || state.payment_method || '', totalCents = 0, validTotals = false;
+const $ = id => document.getElementById(id);
+const extraPayments=(state.payments||[]).slice(1).map(p=>({...p,amount:String(p.amount??'').replace(/^-/,'')}));
+const REFUND_METHODS=['cash','credit','account'];
+const primaryDetail={...(state.payments?.[0]||{})};
+function tenderFields(p,method){
+ const box=document.createElement('span');box.className='tender-details';
+ if(method==='credit'){
+  const select=document.createElement('select');select.setAttribute('aria-label','Card type');select.disabled=readonly;
+  for(const name of ['', 'Visa','MasterCard','American Express','Discover']){const o=document.createElement('option');o.value=name;o.textContent=name||'Card type…';select.append(o);}
+  select.value=p.tender_name||'';select.onchange=()=>{p.tender_name=select.value;dirty=true;};box.append(select);
+ }else if(method==='check'||method==='gift'){
+  const input=document.createElement('input');input.maxLength=100;input.value=p.reference||'';input.readOnly=readonly;
+  input.placeholder=method==='check'?'Check number':'Gift certificate number';input.setAttribute('aria-label',input.placeholder);
+  input.oninput=()=>{p.reference=input.value;dirty=true;};box.append(input);
+  if(method==='gift'){const check=document.createElement('button');check.type='button';check.className='button';check.textContent='Check Balance';const result=document.createElement('span');result.setAttribute('role','status');check.onclick=async()=>{try{const response=await fetch('/pos/gift-certificates/lookup/?number='+encodeURIComponent(input.value));const data=await response.json();result.textContent=response.ok?'Remaining balance: $'+data.balance:data.error;}catch{result.textContent='Balance lookup unavailable.';}};box.append(check,result);}
+ }
+ return box;
+}
+function renderPrimaryDetail(){const bar=document.querySelector('.payment-bar');if(!bar)return;bar.querySelector('.tender-details')?.remove();bar.append(tenderFields(primaryDetail,payment));}
+
+const money = cents => new Intl.NumberFormat('en-US', {style:'currency',currency:'USD'}).format(cents/100);
+// === QB math (pure functions; sales/test_qb_half_up.py runs this block in Node against the server's Decimal code) ===
+// Integer arithmetic mirrors the server (sales/models.py, sales/discounts.py), QuickBooks' way:
+// - unit prices are whole cents when typed; a % line discount keeps the exact price to 4 decimals (1379.95 x 90 % =
+// 1241.9550), so prices are handled in 1/10000 dollars; a line total = qty x exact price rounded half-up to cents;
+// - the receipt % discount is spread over the eligible lines: half-up on each line total, leftover cent on the
+// largest line; Subtotal stays gross and Total = Subtotal - Discount + Tax;
+// - tax per rate on the UNROUNDED extensions less discount shares, rounded half-up once (QB taxes 129.95 + 109.975
+// as 239.925 -> 16.79, not 239.93 -> 16.80).
+// Signed integer division with ties away from zero, matching Decimal ROUND_HALF_UP.
+function halfUp(n,d){const sign=n<0n?-1n:1n;return sign*((sign*n+d/2n)/d);}
+function fixed(value, places) {
+ const s = String(value);
+ // places 0 = whole number (quantities): '2' or '2.000' are whole, '2.5' is not.
+ if (!(places ? new RegExp('^\\d+(?:\\.\\d{1,'+places+'})?$') : /^\d+(?:\.0+)?$/).test(s)) return null;
+ const [whole, fraction=''] = s.split('.');
+ const n = Number(whole)*10**places + Number(fraction.padEnd(places,'0'));
+ return Number.isSafeInteger(n) && n <= 999999999999 ? n : null;
+}
+// A unit price in 1/10000 dollars (BigInt). Typed prices allow 2 decimals; prices the server or a % discount
+// produced carry up to 4.
+function priceUnits(value,places){const s=String(value??'').trim();if(!new RegExp('^\\d+(?:\\.\\d{1,'+places+'})?$').test(s))return null;const [whole,fraction='']=s.split('.');if(whole.length>12)return null;return BigInt(whole)*10000n+BigInt(fraction.padEnd(4,'0'));}
+const unitsText=units=>{const s=units.toString().padStart(5,'0');return s.slice(0,-4)+'.'+s.slice(-4).replace(/00$/,'');};
+const unitsDisplay=units=>(Number(halfUp(units,100n))/100).toFixed(2);
+// QB's line % discount: exact discounted price from the regular price, kept to 4 decimals (half-up at the 4th).
+function discountedUnits(regularCents,pctHundredths){return halfUp(BigInt(regularCents)*BigInt(10000-pctHundredths),100n);}
+function signed(value){const s=String(value??'').trim();const negative=s.startsWith('-');const n=fixed(negative?s.slice(1):s,0);return n===null?null:(negative?-n:n);}
+const discountable=line=>!(line.returned_from_line||line.account_payment||line.certificate_number);
+// A line's exact extension in 1/10000 dollars (qty x exact price, unrounded), or null when the line is not valid.
+function lineUnits(line) {
+ // Return lines (Accept Return, B1) carry a negative quantity, no more than the quantity sold on the original receipt.
+ const q=line.returned_from_line?signed(line.quantity):fixed(line.quantity,0), p=priceUnits(line.price,line.price_typed?2:4);
+ if(q===null || p===null || lineDiscountOver(line)) return null;
+ if(line.returned_from_line ? (q>=0 || -q>Number(line.return_limit||0)) : q<=0) return null;
+ return BigInt(q)*p;
+}
+// The line total shown and summed into the Subtotal: the exact extension rounded half-up to whole cents (QB's Ext.).
+function lineCents(line){const units=lineUnits(line);return units===null?null:Number(halfUp(units,100n));}
+// Each line's share of a receipt % discount, in cents (mirrors sales.discounts.apply_discounts): the receipt's own
+// percent over the eligible lines (allocate_receipt_discount), and on a return line the original receipt's percent,
+// so the refund is the discounted amount. Sales orders take the same whole-order %, or a whole-cent dollar
+// amount (`discountAmount`, orders only): each eligible line's share is its part of the amount by line total, half-up,
+// leftover cent on the largest line - QB's spread of a typed dollar receipt discount. An amount above the eligible
+// lines' total gives no shares and marks the Map `over` (the server refuses it). `kind` is kept for the callers
+// (receipts and orders both allocate; nothing else does).
+function receiptShares(lines,discountPercent,kind,discountAmount,keepTotal=null){
+ const shares=new Map();
+ // A pickup receipt's lines carry the shares their sales order gave them (services.fulfill_order / a re-save keeps
+ // them); nothing is re-allocated, and a line added to a pickup receipt takes no share.
+ if(kind==='sale'&&lines.some(l=>l.order_line)){for(const line of lines){const c=fixed(line.order_line?line.receipt_discount||'0':'0',2);shares.set(line,BigInt(c||0));}return shares;}
+ for(const line of lines){if(!line.returned_from_line)continue;const pct=fixed(line.return_discount_percent||'0',2);const c=lineCents(line);if(c===null)continue;
+  if(pct)shares.set(line,halfUp(BigInt(c)*BigInt(pct),10000n));
+  // Sold on a pickup of a $-discounted order (percent 0): refund the line's own share of it, by quantity.
+  else{const share=fixed(line.return_discount_share||'0',2),sold=fixed(line.return_sold_amount||'0',2);if(share&&sold)shares.set(line,halfUp(BigInt(c)*BigInt(share),BigInt(sold)));}}
+ const pct=fixed(discountPercent||'0',2);const amt=kind==='order'?fixed(discountAmount||'0',2):0;
+ if(pct===null||pct>10000||amt===null||(!pct&&!amt)||(kind!=='sale'&&kind!=='order'))return shares;
+ const targets=[];for(const line of lines){if(!discountable(line))continue;const c=lineCents(line);if(c===null)continue;targets.push([line,BigInt(c)]);}
+ if(!targets.length){if(amt)shares.over=true;return shares;}
+ const base=targets.reduce((a,[,c])=>a+c,0n);
+ // keepTotal (orders from QuickBooks only): QB's typed-dollar discount amount while its percent is left alone; the
+ // percent shapes the shares and the leftover goes on the largest line (discounts.apply_discounts keep_total).
+ const kept=keepTotal!==null&&pct&&!amt?BigInt(keepTotal):null;
+ if((amt&&BigInt(amt)>base)||(kept!==null&&kept>base)){shares.over=true;return shares;}
+ const total=amt?BigInt(amt):kept!==null?kept:halfUp(base*BigInt(pct),10000n);
+ let sum=0n,largest=null;for(const [line,c] of targets){const share=amt?halfUp(c*BigInt(amt),base):halfUp(c*BigInt(pct),10000n);shares.set(line,share);sum+=share;if(largest===null||c>largest[1])largest=[line,c];}
+ if(sum!==total)shares.set(largest[0],shares.get(largest[0])+total-sum);
+ return shares;
+}
+// Subtotal / Discount / Tax of a set of lines (plus extra taxable cents per rate, e.g. restocking fees), in cents.
+function qbTotals(lines,discountPercent,kind,taxExempt,extra=[],discountAmount='0',keepTotal=null){
+ let sub=0,tax=0,known=true,valid=true;const byRate=new Map();const shares=receiptShares(lines,discountPercent,kind,discountAmount,keepTotal);let discount=0n;let over=shares.over===true;
+ for(const line of lines){
+  const cents=lineCents(line);if(cents===null){valid=false;continue;}
+  sub+=cents;const share=shares.get(line)||0n;discount+=share;
+  if(line.tax_rate===null||line.tax_rate===undefined)known=false;
+  else{const rate=taxExempt?0:fixed(line.tax_rate,3);if(rate===null){known=false;}else if(rate){byRate.set(rate,(byRate.get(rate)||0n)+lineUnits(line)-share*100n);}}
+ }
+ if(valid)for(const fee of extra){sub+=fee.cents;const rate=taxExempt||fee.tax_rate==null?0:fixed(fee.tax_rate,3);if(rate)byRate.set(rate,(byRate.get(rate)||0n)+BigInt(fee.cents)*100n);}
+ for(const [rate,amount] of byRate)tax+=Number(halfUp(amount*BigInt(rate),10000000n));
+ if(!valid)over=false;else if(over)valid=false;  // a $ discount above the items' total: the totals stay visible, saving is refused
+ return {sub,discount:Number(discount),tax,total:sub-Number(discount)+tax,valid,known,over,shares};
+}
+// An open sales order imported from QuickBooks (review, finding 6), the way services.save_document saves it: `rec`
+// (views.qb_recorded) holds QB's recorded figures and each saved line's amount / share / rate. A typed-dollar QB
+// discount keeps its amount while its percent is left alone; and while nothing that moves money changed (same lines,
+// amounts, shares, rates, discount and tax-exempt flag) the order shows QB's recorded Subtotal / Discount / Tax / Total,
+// which may include a shipping charge the lines don't carry. Any money edit totals it like an app order.
+function qbOrderTotals(lines,discountPercent,taxExempt,discountAmount,rec){
+ const pct=fixed(discountPercent||'0',2),amt=fixed(discountAmount||'0',2);
+ const keep=rec&&rec.typed_discount&&pct!==null&&pct===fixed(rec.discount_percent||'0',2)&&!amt?fixed(rec.discount,2):null;
+ const t=qbTotals(lines,discountPercent,'order',taxExempt,[],discountAmount,keep);
+ if(!rec||!t.valid||!t.known||rec.total===null||rec.tax===null)return t;
+ const saved=rec.lines||{};
+ const same=taxExempt===rec.tax_exempt&&lines.length===Object.keys(saved).length&&(amt?0:pct)===fixed(rec.discount_percent||'0',2)&&t.discount===fixed(rec.discount,2)
+  &&lines.every(line=>{const r=line.id!=null&&saved[String(line.id)];return r&&lineCents(line)===fixed(r.amount,2)&&Number(t.shares.get(line)||0n)===fixed(r.share,2)
+   &&line.tax_rate!=null&&r.tax_rate!=null&&fixed(line.tax_rate,3)===fixed(r.tax_rate,3);});
+ if(!same)return {...t,recorded:false};
+ const sub=fixed(rec.subtotal,2),discount=fixed(rec.discount,2),tax=fixed(rec.tax,2),total=fixed(rec.total,2);
+ return {...t,sub,discount,tax,total,recorded:true};
+}
+// The line % discount's ONE base: an inventory item's
+// regular price from the pick (addCatalogItem) — a typed price is never the base and the % replaces it. A misc line
+// (no item) has no regular price, so its base is the price typed on it. Kept in line.original_price and sent with the
+// line, so the server re-derives the identical exact price.
+// a line discount is a percent OR a dollar amount (`discount_amount`, whole cents). The dollar amount is QB's
+// "Unit Discount": taken off each unit's regular price (price = regular - $; QB's Ext Discount = qty x Unit Discount),
+// so it is per unit, never per line. It may not be more than the regular price (the line's extended price at qty 1).
+const lineDollarsOff=line=>line.discount_amount===''||line.discount_amount==null?0:fixed(line.discount_amount,2);
+function lineDiscountOver(line){const amt=lineDollarsOff(line);if(!amt)return false;const regular=fixed(line.original_price??'',2);return amt===null||regular===null||amt>regular;}
+function applyLinePercent(line){
+ const pct=line.discount_percent===''||line.discount_percent==null?0:fixed(line.discount_percent,2);
+ const amt=lineDollarsOff(line);
+ if(pct===null||pct>10000||amt===null||(pct&&amt))return false;
+ if(!line.original_price||(line.price_typed&&!line.item_id)){const units=priceUnits(line.price,line.price_typed?2:4);if(units===null)return false;line.original_price=unitsDisplay(units);}
+ const regular=fixed(line.original_price,2);if(regular===null)return false;
+ if(amt>regular)return false;  // lineUnits refuses the line until the amount is fixed
+ line.price=pct?unitsText(discountedUnits(regular,pct)):amt?unitsText(BigInt(regular-amt)*100n):line.original_price;line.price_typed=false;return true;
+}
+// Restocking fee cents per tax rate (mirrors sales.models.restocking_fees as services.save_document calls it): the fee
+// percent (thousandths) of the returned merchandise NET of each return line's share of the original receipt's discount,
+// so an item from a 10 %-off receipt is charged on 90 % of its price. Returns [{tax_rate, cents}].
+function restockingFees(lines,discountPercent,kind,pctThousandths){
+ const shares=receiptShares(lines,discountPercent,kind);const byRate=new Map();
+ for(const line of lines){if(!line.returned_from_line)continue;const c=lineCents(line);if(c===null)continue;const key=line.tax_rate==null?'':String(Number(line.tax_rate));byRate.set(key,(byRate.get(key)||0n)+(shares.get(line)||0n)-BigInt(c));}
+ const fees=[];for(const [rate,base] of byRate){const cents=Number(halfUp(base*BigInt(pctThousandths),100000n));if(cents>0)fees.push({tax_rate:rate===''?null:rate,cents});}
+ return fees;
+}
+// === end QB math ===
+function discountFields(line){
+ const box=document.createElement('span');box.className='discount-extra';const select=document.createElement('select');select.setAttribute('aria-label','Discount reason');select.disabled=readonly;
+ const reasons=JSON.parse(document.getElementById('discount-reasons')?.textContent||'[]');if(line.discount_reason&&!reasons.includes(line.discount_reason))reasons.push(line.discount_reason);
+ for(const name of ['',...reasons]){const o=document.createElement('option');o.value=name;o.textContent=name||'Discount reason…';select.append(o);}select.value=line.discount_reason||'';
+ select.onchange=()=>{line.discount_reason=select.value;dirty=true;};const note=document.createElement('input');note.maxLength=200;note.placeholder='Discount note';note.setAttribute('aria-label','Discount note');note.value=line.discount_note||'';note.readOnly=readonly;note.oninput=()=>{line.discount_note=note.value;dirty=true;};box.append(select,note);
+ if(line!==state&&!readonly){
+  // Percent or Dollars off this line (the order discount's choice, per line). One box; the select says which, and
+  // the other field is kept empty so the server gets one of them.
+  const mode=document.createElement('select');mode.className='line-discount-type';mode.setAttribute('aria-label','Line discount as percent or dollars for '+(line.item_name||line.description));
+  for(const [v,t] of [['percent','%'],['dollars','$']]){const o=document.createElement('option');o.value=v;o.textContent=t;mode.append(o);}
+  const pct=document.createElement('input');pct.type='number';pct.min='0';pct.step='0.01';pct.className='line-percent';
+  const dollars=()=>mode.value==='dollars';
+  const setMode=()=>{pct.max=dollars()?'99999999':'100';pct.placeholder=dollars()?'$ off':'% off';pct.setAttribute('aria-label',(dollars()?'Dollars off each for ':'Percent off for ')+(line.item_name||line.description));};
+  mode.value=line.discount_amount&&Number(line.discount_amount)?'dollars':'percent';setMode();
+  pct.value=dollars()?line.discount_amount:(line.discount_percent&&Number(line.discount_percent)?line.discount_percent:'');
+  mode.onchange=()=>{if(dollars()){line.discount_amount=pct.value;line.discount_percent='0';}else{line.discount_percent=pct.value;line.discount_amount='0';}setMode();pct.oninput();};
+  // Update this row's price box and line total in place (no re-render: that would replace the box being typed in
+  // and drop focus after the first digit — a prior review).
+  pct.oninput=()=>{if(dollars()){line.discount_amount=pct.value;line.discount_percent='0';}else{line.discount_percent=pct.value;line.discount_amount='0';}dirty=true;const row=pct.closest('tr');if(applyLinePercent(line)){const price=row?.querySelector('.line-price');if(price){const units=priceUnits(line.price,4);price.value=units===null?line.price:unitsDisplay(units);}}pct.classList.toggle('invalid',lineDiscountOver(line));const cents=lineCents(line);const amount=row?.querySelector('.line-amount');if(amount)amount.textContent=cents===null?'—':money(cents);totals();};box.append(mode,pct);}
+ return box;
+}
+$('receipt-discount-fields')?.append(discountFields(state));
+// Order discount as Percent or Dollars: one box, the select says which; the other field is kept at 0 so the
+// server stores percent 0 for a dollar amount. A saved dollar discount loads as discount with percent 0.
+state.discount_amount=(!Number(state.discount_percent)&&Number(state.discount)&&state.kind==='order')?state.discount:'0';
+const discountType=$('receipt-discount-type'),discountValue=$('receipt-discount-value');
+if(discountType){discountType.value=Number(state.discount_amount)?'dollars':'percent';}
+function setDiscountMode(){if(!discountType||!discountValue)return;const dollars=discountType.value==='dollars';discountValue.max=dollars?'9999999999.99':'100';discountValue.placeholder=dollars?'$ off the order':'% off the order';discountValue.value=dollars?state.discount_amount:state.discount_percent;}
+if(discountValue&&Number(state.discount_amount))discountValue.value=state.discount_amount;
+setDiscountMode();
+discountType?.addEventListener('change',()=>{const dollars=discountType.value==='dollars';const value=discountValue.value;if(dollars){state.discount_amount=value;state.discount_percent='0';}else{state.discount_percent=value;state.discount_amount='0';}setDiscountMode();dirty=true;renderLines();});
+discountValue?.addEventListener('input',e=>{if(discountType?.value==='dollars'){state.discount_amount=e.target.value;state.discount_percent='0';}else{state.discount_percent=e.target.value;state.discount_amount='0';}dirty=true;renderLines();});
+// Optional restocking fee (Accept Return): RESTOCKING_FEE_PERCENT of the returned lines' net amounts per tax rate,
+// rounded half-up to whole cents, taxed at that rate (restockingFees above; the server recomputes it on save).
+function computeFees(){
+ if(readonly) return (state.restocking_fee_lines||[]).map(f=>({...f,cents:Math.round(Number(f.amount)*100)}));
+ if(!state.restocking_fee) return [];
+ const pct=fixed(state.restocking_fee_percent||'0',3); if(pct===null) return [];
+ return restockingFees(state.lines,state.discount_percent,state.kind,pct).map(fee=>({...fee,item_name:'Restocking fee',description:`Restocking fee (${Number(state.restocking_fee_percent)}% of returned items)`,quantity:'1'}));
+}
+function renderFees(){
+ document.querySelectorAll('#line-body tr.fee-line').forEach(r=>r.remove());
+ for(const fee of computeFees()){const row=document.createElement('tr');row.className='fee-line';
+  for(const [text,cls] of [[fee.item_name,'line-name'],[fee.description,'line-description'],['1','number'],[money(fee.cents),'number'],[fee.tax_rate==null?'—':String(Number(fee.tax_rate)),'number'],[money(fee.cents),'number'],['','number'],['','no-print']]){const td=document.createElement('td');td.textContent=text;td.className=cls;row.append(td);}
+  if(state.kind==='order')row.insertBefore(document.createElement('td'),row.lastChild);
+  $('line-body').append(row);}
+ const field=$('restocking-fee-field');if(field)field.hidden=!state.lines.some(l=>l.returned_from_line);
+ if(field&&field.hidden&&state.restocking_fee){state.restocking_fee=false;$('restocking-fee').checked=false;}
+}
+const isRefund=()=>validTotals && totalCents<0;
+function signedAmount(value){const v=String(value??'').trim();return isRefund()&&v&&!v.startsWith('-')?'-'+v:v;}
+function updateRefundMode(){
+ // A pickup receipt's #payment-method is a hidden input (payment was taken on the order), not a select: skip it, or
+ // the whole page script stopped here at load and Print Receipt did nothing on pickups (found during pickup testing).
+ const refund=isRefund();
+ if($('payment-method-label'))$('payment-method-label').textContent=refund?'Refund method':'Payment method';
+ if($('tendered-label'))$('tendered-label').textContent=refund?'Amount Refunded':'Amount Received';
+ document.querySelectorAll('#payment-method, #extra-payments select[aria-label="Additional payment method"]').forEach(select=>{if(!select.options)return;for(const o of select.options){if(o.value)o.disabled=refund&&!REFUND_METHODS.includes(o.value);}});
+}
+function confirmAction(message) {
+ const dialog=$('confirm-dialog');$('confirm-message').textContent=message;dialog.returnValue='cancel';
+ return new Promise(resolve=>{dialog.addEventListener('close',()=>resolve(dialog.returnValue==='confirm'),{once:true});dialog.showModal();});
+}
+// Put on Hold: how long the items stay reserved (presets, custom date, no expiry; default 1 week). Only a hold for a
+// real customer reserves stock (no customer or a QUOTE customer does not) - the server decides; this text just says so.
+function reservesStock(){return !!state.customer_id && !/\bQUOTE\b/i.test(state.customer_name||'');}
+function chooseHold(){
+ const dialog=$('hold-dialog');if(!dialog)return Promise.resolve(state.hold_until||'keep');
+ const form=dialog.querySelector('form'),date=$('hold-date'),note=$('hold-note');
+ $('hold-message').textContent=reservesStock()?`The items on this receipt will be held for ${state.customer_name} and taken out of Available stock until the hold runs out, the receipt is finished, or it is deleted.`:(state.customer_id?'A QUOTE receipt holds no stock; the hold time only shows on the Held Receipts list.':'A held receipt with no customer (set sign) holds no stock.');
+ const sync=()=>{const choice=form.hold_until.value;date.hidden=choice!=='custom';date.required=!date.hidden;if(!date.hidden&&!date.value){const d=new Date();d.setDate(d.getDate()+7);date.value=d.toISOString().slice(0,10);}note.textContent=choice==='none'?'The items stay held until the receipt is finished or deleted.':choice==='keep'?'':'The receipt stays on the Held Receipts list after the hold runs out, marked Expired, until it is finished, extended or deleted.';};
+ form.querySelectorAll('input[name=hold_until]').forEach(r=>r.onchange=sync);sync();
+ dialog.returnValue='cancel';
+ return new Promise(resolve=>{
+  const done=()=>{dialog.removeEventListener('close',done);$('hold-cancel').onclick=null;if(dialog.returnValue!=='confirm')return resolve(null);const choice=form.hold_until.value;resolve(choice==='custom'?date.value:choice);};
+  $('hold-cancel').onclick=()=>{dialog.returnValue='cancel';dialog.close();};
+  form.onsubmit=e=>{if(form.hold_until.value==='custom'&&!date.value){e.preventDefault();showError('Enter the hold-until date.');return;}dialog.returnValue='confirm';};
+  dialog.addEventListener('close',done);dialog.showModal();});
+}
+function showError(message) { $('error').textContent=message; $('error').hidden=false; $('error').scrollIntoView({block:'nearest'}); }
+// a "choose a customer first" message (register or server) goes away once a customer is picked.
+const CUSTOMER_NEEDED=/\b(choose|select) a customer\b|\bcustomer is required\b/i;
+function clearCustomerError(){const e=$('error');if(e&&!e.hidden&&CUSTOMER_NEEDED.test(e.textContent)){e.hidden=true;e.textContent='';}}
+function totals() {
+ const discountRow=$('discount-row');
+ if(readonly){$('subtotal').textContent='$'+state.subtotal;$('tax').textContent=state.tax?'$'+state.tax:'—';$('total').textContent=state.total?'$'+state.total:'—';if(discountRow){discountRow.hidden=!Number(state.discount);$('discount').textContent='-$'+state.discount;}renderFees();return;}
+ const t=state.kind==='order'&&state.qb_recorded?qbOrderTotals(state.lines,state.discount_percent,state.tax_exempt,state.discount_amount,state.qb_recorded)
+  :qbTotals(state.lines,state.discount_percent,state.kind,state.tax_exempt,computeFees(),state.discount_amount);let {sub,discount,tax,valid,known,over}=t;
+ renderFees();
+ if(state.pickup_receipt&&valid&&known&&state.lines.every(l=>l.order_line)&&sub===fixed(state.subtotal||'',2)&&discount===fixed(state.discount||'',2)&&fixed(state.tax||'',2)!==null){tax=fixed(state.tax,2);t.total=sub-discount+tax;}  // same lines: the tax the pickup squared with its order
+ totalCents=t.total; validTotals=valid && known && state.lines.length>0;
+ $('subtotal').textContent=valid||over?money(sub):'Check items';
+ if(discountRow){discountRow.hidden=over?false:(!valid||discount===0);$('discount').textContent=over?'More than the items':valid?'-'+money(discount):'';}
+ $('tax').textContent=known?money(tax):'Pending setup';
+ $('total-label').textContent=known?'Total':'Before Tax';
+ $('total').textContent=valid?money(known?totalCents:sub-discount):'—';
+ updateRefundMode();
+ document.querySelectorAll('[data-action="complete"]').forEach(b=>b.disabled=busy || !validTotals || (!payment && totalCents!==0) || (isRefund() && !REFUND_METHODS.includes(payment)));
+ document.querySelectorAll('[data-action="hold"],[data-action="save"]').forEach(b=>b.disabled=busy || !state.lines.length);
+ change();
+}
+function placeChange(){
+ // the change comes out of the cash, so the Change note sits beside the (last) cash payment, as on QB's receipt.
+ const note=$('change');if(!note)return;const cashRows=isRefund()?[]:[...document.querySelectorAll('#extra-payments > .tools[data-method="cash"]')];
+ const anchor=cashRows.length?cashRows[cashRows.length-1].querySelector('.extra-amount'):$('tendered')?.closest('label');
+ if(anchor&&anchor.nextElementSibling!==note)anchor.after(note);
+}
+function change() {
+ if(!$('change')) return;
+ placeChange();
+ const first=fixed($('tendered').value,2);const rest=extraPayments.map(p=>fixed(p.amount,2));
+ const cents=first===null||rest.includes(null)?null:first+rest.reduce((a,b)=>a+b,0);
+ if(isRefund()){const due=-totalCents;$('change').textContent=cents===null?'':(cents===due?'Refund '+money(due):cents<due?'Refund due '+money(due-cents):'More than the refund by '+money(cents-due));return;}
+ $('change').textContent=payment && cents!==null && validTotals ? (cents>=totalCents?'Change '+money(cents-totalCents):'Due '+money(totalCents-cents)) : '';
+}
+// a warning (not a block) on the Save question when the change would be more than the sale itself, e.g. "100"
+// typed in front of a pre-filled 1306.84.
+function changeWarning(){
+ if(isRefund()||!validTotals||totalCents<=0||!$('tendered'))return '';
+ const first=fixed($('tendered').value,2);const rest=extraPayments.map(p=>fixed(p.amount,2));
+ if(first===null||rest.includes(null))return '';
+ const changeCents=first+rest.reduce((a,b)=>a+b,0)-totalCents;
+ return changeCents>totalCents?` Change due ${money(changeCents)}: check the amount received.`:'';
+}
+// (matching QB): clicking or tabbing into a number box (amount received, extra payment amounts, the order payment
+// amount, discounts, line price and quantity) selects what is there, so typing replaces a pre-filled amount instead of
+// adding digits to it.
+// the click that focuses the box puts the caret where it landed on mouseup, dropping that selection. Never cancel
+// the mouseup for it (that left Chrome's spinner arrows "held down", counting up without stopping): select again just
+// after the click instead, unless the click changed the value (a spinner arrow) or the mouse dragged to pick text.
+const isNumberBox=box=>box instanceof HTMLInputElement&&box.type==='number'&&!box.readOnly&&!box.disabled;
+let focusClick=null;
+document.addEventListener('focusin',e=>{if(isNumberBox(e.target))try{e.target.select();}catch{}});
+document.addEventListener('mousedown',e=>{const box=e.target;focusClick=isNumberBox(box)&&document.activeElement!==box?{box,value:box.value,x:e.clientX,y:e.clientY}:null;},true);
+document.addEventListener('mouseup',e=>{const click=focusClick;focusClick=null;if(!click||e.target!==click.box)return;
+ if(Math.abs(e.clientX-click.x)>3||Math.abs(e.clientY-click.y)>3)return;
+ setTimeout(()=>{if(document.activeElement===click.box&&click.box.value===click.value)try{click.box.select();}catch{}});});
+function renderShippingChoices(){
+ const choice=$('shipping-choice');if(!choice)return;choice.replaceChildren();
+ const addresses=state.customer_addresses||[];
+ for(const a of [{label:'Current address',address:$('shipping').value},{label:'Default address',address:state.customer_default_shipping||''},...addresses]){const opt=document.createElement('option');opt.value=a.address;opt.textContent=a.label;choice.append(opt);}
+ choice.hidden=!state.customer_id;choice.onchange=()=>{$('shipping').value=choice.value;dirty=true;};
+}
+function renderCustomer() {
+ if(!$('customer-label')) return;
+ $('edit-selected-customer').href=state.customer_id?'/customers/'+state.customer_id+'/edit/':'/customers/';
+ $('customer-notes').textContent=state.customer_notes||'';
+ $('customer-label').textContent=state.customer_name || (state.kind==='order'?'Customer required — search by name or phone':'Customer required — search by name or phone');
+ $('clear-customer').hidden=!state.customer_id;
+}
+// Per return line: Return reason (pick-list), Return note, "Damaged — don't restock" (stays out of sellable stock).
+const RETURN_REASONS=JSON.parse(document.getElementById('return-reasons')?.textContent||'[]');
+function reasonSelect(value,name){const select=document.createElement('select');select.setAttribute('aria-label','Return reason for '+name);
+ for(const [v,label] of [['','Return reason…'],...RETURN_REASONS]){const o=document.createElement('option');o.value=v;o.textContent=label;select.append(o);}select.value=value||'';return select;}
+function noteInput(value,name){const input=document.createElement('input');input.type='text';input.maxLength=200;input.placeholder='Return note';input.value=value||'';input.setAttribute('aria-label','Return note for '+name);return input;}
+function returnExtras(line){
+ const box=document.createElement('div');box.className='return-extra';const name=line.item_name||line.description;
+ if(readonly){const reason=Object.fromEntries(RETURN_REASONS)[line.return_reason]||'';const text=[reason,line.return_note].filter(Boolean).join(' - ');
+  if(text){const s=document.createElement('span');s.textContent='Reason: '+text;box.append(s);}
+  if(line.damaged){const s=document.createElement('span');s.textContent="Damaged — don't restock";box.append(s);}return box;}
+ const select=reasonSelect(line.return_reason,name);select.onchange=()=>{line.return_reason=select.value;dirty=true;};
+ const note=noteInput(line.return_note,name);note.oninput=()=>{line.return_note=note.value;dirty=true;};
+ const label=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=line.damaged===true;
+ check.setAttribute('aria-label',"Damaged — don't restock "+name);check.onchange=()=>{line.damaged=check.checked;dirty=true;};
+ label.append(check," Damaged — don't restock");box.append(select,note,label);return box;
+}
+function renderLines() {
+ $('line-body').replaceChildren(); $('empty-lines').hidden=state.lines.length>0;
+ state.lines.forEach((line,index)=>{
+  const row=document.createElement('tr');if(line.returned_from_line)row.className='return-line';
+  function cell(text,cls) { const td=document.createElement('td'); td.textContent=text; if(cls)td.className=cls; row.append(td);return td; }
+  for(const field of ['item_name','description']){const td=cell('',field==='item_name'?'line-name':'line-description');const input=document.createElement('textarea');input.rows=2;input.value=line[field] || '';input.setAttribute('aria-label',field==='sku'?'Item number':field==='item_name'?'Item name':'Description');if(readonly||line.account_payment||line.returned_from_line)input.readOnly=true;input.addEventListener('input',()=>{line[field]=input.value;dirty=true;});td.append(input);if(field==='item_name'&&!line.returned_from_line&&!line.account_payment&&!line.certificate_number)td.append(discountFields(line));if(field==='item_name'&&line.returned_from_line){const note=document.createElement('span');note.className='return-note';note.textContent='Return Item – Receipt# '+(line.return_receipt||'');td.append(note);td.append(returnExtras(line));}}
+  for(const [field,step] of [['quantity','1'],['price','0.01'],['tax_rate','0.001']]) {
+   const td=cell('','number');
+   if(readonly) td.textContent=field==='price'?'$'+(line.display_price??line.price):field==='quantity'?String(Number(line.quantity)):(state.tax_exempt===true?'0':line.tax_rate===null?'—':String(Number(line.tax_rate)));  // an exempt sale shows 0 %
+   else {
+    const input=document.createElement('input'); input.type='number';input.step=step;input.min=field==='quantity'?'1':'0';input.max='99999999';input.className='line-input';if(field==='price')input.classList.add('line-price');if(line.certificate_number&&field!=='price')input.readOnly=true;if(line.account_payment&&field!=='price')input.readOnly=true;if(line.returned_from_line){if(field==='quantity'){input.min='-'+(line.return_limit||'1');input.max='-1';}else input.readOnly=true;}input.setAttribute('aria-label',`${field==='quantity'?'Quantity':field==='tax_rate'?'Tax rate':'Price'} for ${line.item_name || line.description}`);
+    // The price box shows whole cents; the exact (up to 4-decimal) price stays in line.price until the cashier types.
+    if(field==='price'&&!line.price_typed){const units=priceUnits(line.price,4);input.value=units===null?line.price:unitsDisplay(units);}else input.value=line[field];
+    // on a tax-exempt sale the line's Tax % shows 0, like the $0.00 tax. Display only: the line keeps its own rate
+    // (it comes back if Tax-exempt is unticked) and the tax math is unchanged.
+    if(field==='tax_rate'&&state.tax_exempt===true){input.value='0';input.readOnly=true;input.title='Tax-exempt sale';}
+    input.addEventListener('input',()=>{line[field]=input.value;dirty=true;if(field==='price'){line.price_typed=true;if((line.discount_percent&&Number(line.discount_percent))||(line.discount_amount&&Number(line.discount_amount))){line.discount_percent='0';line.discount_amount='0';const pct=row.querySelector('.line-percent');if(pct){pct.value='';pct.classList.remove('invalid');}}}const cents=lineCents(line);amount.textContent=cents===null?'—':money(cents);totals();}); td.append(input);
+   }
+  }
+  const value=lineCents(line);const amount=cell(readonly?'$'+line.amount:value===null?'—':money(value),'number line-amount');
+  cell(line.on_hand===null || line.on_hand===undefined?'Unverified':String(Number(line.on_hand)),'number');
+  cell(line.available===null || line.available===undefined?(line.item_id?'Unverified':'—'):String(Number(line.available)),'number');  // on hand − open orders − held, the Item List's Available
+  if(state.kind==='order'){const td=cell('');const input=document.createElement('input');input.value=line.vendor || '';input.maxLength=200;input.readOnly=readonly;input.setAttribute('aria-label','Vendor');input.addEventListener('input',()=>{line.vendor=input.value;dirty=true;});td.append(input);}
+  const end=cell('','no-print');
+  if(!readonly){const button=document.createElement('button');button.type='button';button.className='button';button.textContent='Remove';button.setAttribute('aria-label','Remove '+line.description);button.onclick=()=>{state.lines.splice(index,1);dirty=true;renderLines();};end.append(button);}
+  $('line-body').append(row);
+ });totals();
+}
+function lookup(inputId,resultId,kind,select) {
+ const input=$(inputId), results=$(resultId); if(!input)return;
+ let timer, controller;
+ input.addEventListener('input',()=>{
+  clearTimeout(timer);if(controller)controller.abort();results.replaceChildren();
+  const q=input.value.trim();if(q.length<(kind==='items'?1:2))return;
+  timer=setTimeout(async()=>{
+   controller=new AbortController();
+   try {
+    const response=await fetch('/pos/lookup/'+kind+'/?q='+encodeURIComponent(q),{signal:controller.signal});
+    if(!response.ok)throw Error('Search unavailable');
+    const data=await response.json();if(input.value.trim()!==q)return;
+    results.replaceChildren();
+    for(const item of data.results){const b=document.createElement('button');b.type='button';b.textContent=item.label;const small=document.createElement('small');small.textContent=item.detail || item.description;b.append(small);b.onclick=()=>{select(item);input.value='';results.replaceChildren();input.focus();};results.append(b);}
+    if(!data.results.length){const p=document.createElement('p');p.textContent=kind==='items'?'No matching inventory items.':'No matching customers.';results.append(p);}
+   }catch(err){if(err.name!=='AbortError'){const p=document.createElement('p');p.textContent='Search unavailable. Try again.';results.replaceChildren(p);}}
+  },220);
+ });
+ input.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){results.querySelector('button')?.focus();e.preventDefault();}if(e.key==='Escape')results.replaceChildren();if(e.key==='Enter'){const options=results.querySelectorAll('button');if(options.length===1)options[0].click();e.preventDefault();}});
+ results.addEventListener('keydown',e=>{if(e.key==='Escape'){results.replaceChildren();input.focus();}if(e.key==='ArrowDown'){e.target.nextElementSibling?.focus();e.preventDefault();}if(e.key==='ArrowUp'){e.target.previousElementSibling?.focus();e.preventDefault();}});
+ document.addEventListener('click',e=>{if(!input.parentElement.parentElement.contains(e.target))results.replaceChildren();});
+}
+function selectCustomer(customer){clearCustomerError();state.customer_id=customer.id;state.customer_name=customer.label;state.customer_notes=customer.notes+(customer.accept_checks?'':' · Checks not accepted');state.customer_tax_rate=customer.tax_rate;state.tax_exempt=customer.tax_exempt;$('tax-exempt').checked=customer.tax_exempt;$('shipping').value=customer.shipping_address||'';if(customer.tax_rate!==null)state.lines.forEach(line=>{if(!line.account_payment&&!line.returned_from_line&&!line.certificate_number)line.tax_rate=customer.tax_rate;});state.customer_addresses=customer.addresses;state.customer_default_shipping=customer.shipping_address;state.charge_account=customer.charge_account;state.account_balance=customer.account_balance;state.account_limit=customer.account_limit;state.account_effect='0';renderShippingChoices();dirty=true;renderCustomer();renderLines();askContact(customer);}
+// a customer with no phone or no address on file gets a prompt (Save to the customer record, or Skip).
+// Skip never blocks the sale and is remembered for this document only; the next document asks again.
+const contactSkipped=new Set();
+function askContact(customer){
+ const dialog=$('contact-dialog'),info=customer.contact;if(!dialog||!info||readonly)return;
+ const needPhone=info.missing_phone===true,needAddress=info.missing_address===true;
+ if((!needPhone&&!needAddress)||contactSkipped.has(String(customer.id)))return;
+ const form=$('contact-form');form.reset();$('contact-error').hidden=true;
+ $('contact-phone-fields').hidden=!needPhone;$('contact-address-fields').hidden=!needAddress;
+ if(needAddress){form.elements.state.value=info.state||'';form.elements.postal_code.value=info.postal_code||'';}
+ const missing=needPhone&&needAddress?'phone number or address':needPhone?'phone number':'address';
+ $('contact-message').textContent=`${customer.label} has no ${missing} on file. Add it so it prints on the receipt, or Skip.`;
+ $('contact-skip').textContent=needPhone&&needAddress?'Skip (no phone or address)':needPhone?'Skip (no phone)':'Skip (no address)';
+ dialog.dataset.customer=customer.id;dialog.dataset.version=info.version;dialog.showModal();
+ (needPhone?form.elements.phone:form.elements.street).focus();
+}
+$('contact-skip')?.addEventListener('click',()=>{const dialog=$('contact-dialog');contactSkipped.add(String(dialog.dataset.customer));dialog.close();});
+$('contact-dialog')?.addEventListener('cancel',()=>contactSkipped.add(String($('contact-dialog').dataset.customer)));
+$('contact-form')?.addEventListener('submit',async e=>{
+ e.preventDefault();const dialog=$('contact-dialog'),form=e.currentTarget,id=dialog.dataset.customer,error=$('contact-error');
+ const body={version:dialog.dataset.version};
+ if(!$('contact-phone-fields').hidden)body.phone=form.elements.phone.value;
+ if(!$('contact-address-fields').hidden)for(const k of ['street','city','state','postal_code'])body[k]=form.elements[k].value;
+ $('contact-save').disabled=true;
+ try{const response=await fetch(`/customers/${id}/contact/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value},body:JSON.stringify(body)});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.ok)throw Error(data.error||'Could not save. Try again, or Skip.');
+  if(String(state.customer_id)===String(id)){const c=data.customer;
+   if(!$('shipping').value.trim()||$('shipping').value===(state.customer_default_shipping||''))$('shipping').value=c.shipping_address||'';
+   state.customer_default_shipping=c.shipping_address;state.customer_addresses=c.addresses;renderShippingChoices();dirty=true;}
+  contactSkipped.add(String(id));dialog.close();
+ }catch(err){error.textContent=err.message;error.hidden=false;}
+ finally{$('contact-save').disabled=false;}
+});
+lookup('customer-search','customer-results','customers',selectCustomer);
+function addCatalogItem(item,quantity='1'){if(item.label.toUpperCase()==='GIFT CERTIFICATE'){$('gift-dialog').showModal();return;}state.lines.push({item_id:item.id,sku:item.sku,item_name:item.label,description:item.description,quantity,price:item.price,original_price:item.price,tax_rate:state.customer_tax_rate??(item.tax_rate===null?DEFAULT_TAX_RATE:item.tax_rate),on_hand:item.on_hand,available:item.available,vendor:item.vendor});dirty=true;renderLines();}
+lookup('item-search','item-results','items',addCatalogItem);
+document.querySelector('[data-open-item-picker]')?.addEventListener('click',()=>window.openItemPicker(items=>items.forEach(item=>addCatalogItem(item)),{limit:Math.max(0,100-state.lines.length)}));
+$('clear-customer')?.addEventListener('click',()=>{state.customer_id=null;state.customer_name='';state.customer_notes='';state.customer_tax_rate=null;state.customer_addresses=[];state.charge_account=false;state.account_balance='0.00';state.account_limit='0.00';state.account_effect='0';dirty=true;renderShippingChoices();renderCustomer();});
+for(const id of ['notes','shipping','due-date','customer-po']) $(id)?.addEventListener('input',()=>{dirty=true;});
+$('tendered')?.addEventListener('input',()=>{dirty=true;change();});
+if($('payment-method')){$('payment-method').value=payment;$('payment-method').addEventListener('change',()=>{payment=$('payment-method').value;primaryDetail.tender_name='';primaryDetail.reference='';renderPrimaryDetail();if(validTotals && !extraPayments.length)$('tendered').value=(Math.abs(totalCents)/100).toFixed(2);dirty=true;totals();if(payment==='account')(isRefund()?refundToAccount({primary:true}):openAccount('charge',{primary:true}));});}
+$('tax-exempt')?.addEventListener('change',()=>{state.tax_exempt=$('tax-exempt').checked;dirty=true;renderLines();totals();});
+$('order-pickup')?.addEventListener('change',()=>{state.order_pickup=$('order-pickup').checked;dirty=true;});  // no money effect
+// Hold for Pickup: the box shows the optional est. pickup date; both go with Save (a paid sale only, the server checks).
+function pickupFields(){const box=$('hold-for-pickup');if(!box)return {};return {hold_for_pickup:box.checked,est_pickup_date:box.checked?($('est-pickup-date')?.value||''):''};}
+function pickupNote(){const p=pickupFields();if(!p.hold_for_pickup)return '';const m=/^\d{4}-(\d{2})-(\d{2})$/.exec(p.est_pickup_date||'');return ` Hold for Pickup${m?` (est. ${Number(m[1])}/${Number(m[2])})`:''}: the items stay in the store until Mark Picked Up.`;}
+$('hold-for-pickup')?.addEventListener('change',()=>{$('pickup-date-field').hidden=!$('hold-for-pickup').checked;dirty=true;});
+$('est-pickup-date')?.addEventListener('input',()=>{dirty=true;});
+$('restocking-fee')?.addEventListener('change',()=>{state.restocking_fee=$('restocking-fee').checked;dirty=true;totals();});
+document.querySelectorAll('[data-special-open]').forEach(button=>button.addEventListener('click',()=>{const error=$('special-item-error');if(error)error.hidden=true;$('special-dialog').showModal();}));
+$('sell-certificate')?.addEventListener('click',()=>$('gift-dialog').showModal());
+$('gift-cancel')?.addEventListener('click',()=>$('gift-dialog').close());
+$('gift-form')?.addEventListener('submit',e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget));state.lines.push({...data,item_id:null,item_name:'GIFT CERTIFICATE',description:'Gift certificate #'+data.certificate_number,quantity:'1',tax_rate:'0'});dirty=true;renderLines();e.currentTarget.reset();$('gift-dialog').close();});
+$('special-cancel')?.addEventListener('click',()=>$('special-dialog').close());
+$('special-form')?.addEventListener('submit',e=>{e.preventDefault();const form=e.currentTarget;const line=Object.fromEntries(new FormData(form));line.item_id=null;line.tax_rate=state.customer_tax_rate??DEFAULT_TAX_RATE;line.on_hand=null;state.lines.push(line);dirty=true;renderLines();form.reset();$('special-dialog').close();});
+// (matching QB's Add New Special Order Item): the order's pop-up creates a real inventory item (Item List rules, on
+// the server) and adds it as an ordinary item line, so Generate PO fills in its vendor, description and cost. The
+// order itself stays a draft on this page until Save.
+$('special-item-form')?.addEventListener('submit',async e=>{
+ e.preventDefault();const form=e.currentTarget,error=$('special-item-error'),save=$('special-item-save');
+ const say=(text,field)=>{error.textContent=text;error.hidden=false;if(field)form.elements[field]?.focus();};
+ error.hidden=true;
+ const v=name=>form.elements[name].value.trim();
+ if(!v('name'))return say('Enter the item name.','name');
+ if(!v('vendor'))return say('Choose the vendor for this special order item.','vendor');
+ if(v('cost')&&fixed(v('cost'),2)===null)return say('Enter the cost in dollars and cents.','cost');
+ if(fixed(v('price'),2)===null)return say('Enter the price in dollars and cents.','price');
+ const qty=fixed(v('quantity'),0);if(qty===null||qty<1)return say('Enter a whole-number quantity of at least 1.','quantity');
+ if(state.lines.length>=100)return say('An order holds at most 100 items.');
+ const body={name:v('name'),description:v('description'),department:v('department'),vendor:v('vendor'),cost:v('cost'),price:v('price')};
+ save.disabled=true;
+ try{
+  for(;;){
+   const response=await fetch('/pos/special-order-item/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value},body:JSON.stringify(body)});
+   const data=await response.json().catch(()=>({error:'The server could not save this item. Try again.'}));
+   if(response.status===409&&data.duplicate){if(!await confirmAction(data.duplicate)){form.elements.name.focus();return;}body.confirm_duplicate_name=true;continue;}
+   if(!response.ok)return say(data.error||'Could not save this item.',data.field);
+   addCatalogItem(data.item,String(qty));form.reset();$('special-dialog').close();return;
+  }
+ }catch{say('Could not reach the app server. Check the connection and try again.');}
+ finally{save.disabled=false;}
+});
+$('print-document')?.addEventListener('click',()=>{if(dirty){showError('Save your changes before printing.');return;}window.print();});
+for(const button of document.querySelectorAll('[data-action]')) button.addEventListener('click',async()=>{
+ if(busy)return;
+ const action=button.dataset.action;
+ const overrideReason=state.override?($('override-reason')?.value||'').trim():'';
+ if(state.override&&!overrideReason){showError('Enter the reason for this Admin Override before saving.');$('override-reason')?.focus();return;}
+ let depositRefund={};
+ if(action==='cancel'){
+  const held=state.kind==='order'?fixed(state.unused_deposit||'0',2):0;
+  if(held>0){
+   const dialog=$('confirm-dialog'), label=document.createElement('label'),select=document.createElement('select');
+   label.textContent='Refund method ';select.id='deposit-refund-method';
+   for(const [value,text] of [['cash','Cash'],['credit','Credit card'],['account','Account']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}
+   label.append(select);$('confirm-message').after(label);
+   const confirmed=await confirmAction(`Refund customer deposit of ${money(held)} and cancel this unfilled order? Only unused deposits are refunded; completed pickups stay recorded.`);
+   const method=select.value;label.remove();if(!confirmed)return;
+   depositRefund={refund_deposit:true,deposit_refund_method:method,deposit_refund_amount:state.unused_deposit};
+  }else if(!await confirmAction(state.override?'Cancel this past receipt with an Admin Override? Its stock, money and account changes are reversed and the override is logged.':state.kind==='order'?'Cancel this order?':'Cancel this receipt? Completed receipt stock will be restored.'))return;
+ }
+ let holdUntil=null;
+ if(action==='hold'){holdUntil=await chooseHold();if(holdUntil===null)return;}
+ let overrideLimit=false;
+ if(action==='complete'){
+  const acct=accountSummary();let extra='';
+  const label=m=>$('payment-method').querySelector(`option[value="${m}"]`)?.textContent||m;
+  const rawMethods=[payment,...extraPayments.map(p=>p.method)].filter(Boolean);
+  const methods=rawMethods.map(label).join(' + ');
+  // a sale paid (wholly or partly) by Account is a charge to the customer's account, not an "account payment".
+  const charging=!isRefund()&&rawMethods.includes('account')&&acct.charge>0;
+  if(acct.charge||acct.paid){extra=` ${charging?'':acct.charge>0?'Charge '+money(acct.charge)+' to the account. ':acct.charge<0?'Credit '+money(-acct.charge)+' to the account. ':'Payment on account '+money(acct.paid)+'. '}Account balance ${money(acct.before)} → ${money(acct.after)}.`;}
+  if(acct.charge>0&&acct.limit&&acct.after>acct.limit){extra+=` This is over the ${money(acct.limit)} account limit.`;overrideLimit=true;}
+  const message=isRefund()?`Save this return and refund ${money(-totalCents)} by ${methods}?${extra} ${state.lines.some(l=>l.returned_from_line&&l.damaged)?'Returned items go back into stock, except those marked damaged.':'Returned items go back into stock.'}`
+   :totalCents===0&&state.lines.some(l=>l.returned_from_line)&&!payment?'Save this even exchange? No money changes hands. Stock will be updated for the returned and new items.'
+   :charging?`${chargeQuestion(money(totalCents),rawMethods.length>1?methods:'',money(acct.charge))}${extra} Stock will be updated for this sale or correction.`
+   :`Save this sale for ${money(totalCents)} and record ${extraPayments.length?'split':payment} payment?${extra} Stock will be updated for this sale or correction.`;
+  const big=changeWarning()+pickupNote();
+  if(!await confirmAction((state.override?'Admin Override: '+message+' The change and your reason are logged on this receipt.':message)+big))return;
+ }
+ busy=true;$('error').hidden=true;document.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);
+ try {
+  const payload={...state,...depositRefund,action,hold_until:holdUntil,notes:$('notes').value,shipping_address:$('shipping').value,due_date:$('due-date')?.value || '',customer_po:$('customer-po')?.value || '',payments:(totalCents===0&&!payment?[]:[{...primaryDetail,method:payment,amount:signedAmount($('tendered')?.value || '0')},...extraPayments.map(p=>({...p,amount:signedAmount(p.amount)}))]),payment_method:payment,tendered:signedAmount($('tendered')?.value || ''),override_limit:overrideLimit,override:state.override===true,override_reason:overrideReason,...pickupFields()};
+  const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value},body:JSON.stringify(payload)});
+  let result;try{result=await response.json();}catch{throw Error('The server could not save this document. Your entries are still on this page.');}
+  if(!response.ok)throw Error(result.error || 'Unable to save.');
+  dirty=false;
+  if(button.dataset.print&&receiptPrinter){
+   // Save & Print sends the saved document straight to the chosen printer, then opens it with the result.
+   const printed=await sendPrint(result.url+receiptPrinter.dataset.printPath);
+   const note=printed.error?{error:`Saved, but not printed: ${printed.error}`}:{message:[result.message,printed.message].filter(Boolean).join(' ')};
+   try{sessionStorage.setItem('printResult',JSON.stringify({url:result.url,...note}));}catch{}
+   location.href=result.url;
+  }else{
+   // notes from the save (e.g. the special-order item and its PO were updated to match) show after the reload.
+   if(result.message){try{sessionStorage.setItem('printResult',JSON.stringify({url:result.url,message:result.message}));}catch{}}
+   location.href=result.url+(button.dataset.print?'?print=1':'');
+  }
+ }catch(err){showError(err.message);busy=false;document.querySelectorAll('[data-action]').forEach(b=>b.disabled=false);totals();}
+});
+document.querySelectorAll('.order-workflow form').forEach(form=>form.addEventListener('submit',e=>{if(dirty){e.preventDefault();showError('Save the order changes before recording payments or pickup.');}}));
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+function renderExtraPayments(){const area=$('extra-payments');if(!area)return;const changeNote=$('change');if(changeNote&&area.contains(changeNote))$('tendered').closest('label').after(changeNote);area.replaceChildren();extraPayments.forEach((p,index)=>{const row=document.createElement('div');row.className='tools';const select=$('payment-method').cloneNode(true);select.removeAttribute('id');select.setAttribute('aria-label','Additional payment method');select.value=p.method;const amount=document.createElement('input');amount.type='number';amount.step='0.01';amount.min='0';amount.value=p.amount;amount.setAttribute('aria-label','Additional payment amount');amount.className='extra-amount';row.dataset.method=p.method||'';select.onchange=()=>{p.method=select.value;p.tender_name='';p.reference='';renderExtraPayments();dirty=true;if(p.method==='account')(isRefund()?refundToAccount({extra:p}):openAccount('charge',{extra:p}));};amount.oninput=()=>{p.amount=amount.value;dirty=true;change();};const remove=document.createElement('button');remove.type='button';remove.className='button no-print';remove.textContent='Remove payment';remove.onclick=()=>{extraPayments.splice(index,1);dirty=true;renderExtraPayments();change();};row.append(select,amount,tenderFields(p,p.method),remove);area.append(row);});updateRefundMode();change();}
+$('add-payment')?.addEventListener('click',()=>{if(extraPayments.length>=9)return;extraPayments.push({method:'cash',amount:'0.00'});dirty=true;renderExtraPayments();});
+renderPrimaryDetail();
+if(state.payments?.length && $('tendered'))$('tendered').value=String(state.payments[0].amount).replace(/^-/,'');
+$('quick-pick')?.addEventListener('change',async e=>{const area=$('quick-pick-items');area.replaceChildren();if(!e.target.value)return;try{const response=await fetch('/pos/lookup/items/?group='+encodeURIComponent(e.target.value));if(!response.ok)throw Error();const data=await response.json();for(const item of data.results){const b=document.createElement('button');b.type='button';b.className='button';b.textContent=item.label;b.onclick=()=>{state.lines.push({item_id:item.id,sku:item.sku,item_name:item.label,description:item.description,quantity:'1',price:item.price,tax_rate:state.customer_tax_rate??item.tax_rate??DEFAULT_TAX_RATE,on_hand:item.on_hand,available:item.available,vendor:item.vendor});dirty=true;renderLines();};area.append(b);}}catch{showError('Quick Pick unavailable. Try again.');}});
+// Charge Account dialog (QB POS: Account tender / Take Payment for Charge Account).
+const cents=v=>{const n=Math.round(Number(v||0)*100);return Number.isFinite(n)?n:0;};
+// confirm text for a sale charged to the customer's account; `split` = the tenders joined (' + ') when Account
+// is one of several, '' when the whole sale goes on the account.
+function chargeQuestion(total,split,charge){return split?`Save this sale for ${total} (${split}) and charge ${charge} to the customer's account?`:`Save this sale for ${total} and charge it to the customer's account?`;}
+function accountSummary(){
+ const entries=[{method:payment,amount:$('tendered')?.value||'0'},...extraPayments];
+ const charge=entries.filter(e=>e.method==='account').reduce((a,e)=>a+cents(signedAmount(e.amount)),0);
+ const paid=state.lines.filter(l=>l.account_payment).reduce((a,l)=>a+(lineCents(l)||0),0);
+ const before=cents(state.account_balance)-cents(state.account_effect);
+ return {charge,paid,before,after:before+charge-paid,limit:cents(state.account_limit)};
+}
+let accountTarget=null;
+async function openAccount(mode,target){
+ const dialog=$('account-dialog');if(!dialog)return;
+ if(!state.customer_id){showError('Choose a customer before using Account.');if(target?.primary){$('payment-method').value='';payment='';totals();}return;}
+ accountTarget=target||{};
+ if(mode==='charge'&&state.charge_account!==true){
+  const customerId=state.customer_id;
+  try{
+   const data=await window.turnOnChargeAccount(customerId,state.customer_name,document.querySelector('[name=csrfmiddlewaretoken]').value);
+   if(!data){undoAccountTarget();return;}
+   if(state.customer_id!==customerId){undoAccountTarget();return;}
+   state.charge_account=data.charge_account;state.account_balance=data.account_balance;state.account_limit=data.account_limit;
+  }catch(err){undoAccountTarget();showError(err.message);return;}
+ }
+ const s=accountSummary();
+ $('acct-balance').textContent=money(s.before);$('acct-limit').textContent=s.limit?money(s.limit):'No limit';
+ // Available Credit = Account Limit - Balance; a limit of 0 means no limit.
+ $('acct-available').textContent=s.limit?money(s.limit-s.before):'No limit';
+ $('acct-mode-charge').disabled=false;$('acct-message').hidden=true;
+ const m=mode==='charge'?'charge':'pay';
+ dialog.querySelector(`[name=acct-mode][value=${m}]`).checked=true;setAccountMode(m);dialog.showModal();
+}
+function setAccountMode(m){
+ const s=accountSummary();$('acct-amount-label').textContent=m==='charge'?'Charge Amount':'Payment Amount';
+ if(m==='charge'){const others=[{method:payment,amount:$('tendered')?.value||'0'},...extraPayments].filter(e=>e.method&&e.method!=='account').reduce((a,e)=>a+cents(e.amount),0);$('acct-amount').value=(Math.max(0,totalCents-others)/100).toFixed(2);}
+ else{const existing=state.lines.find(l=>l.account_payment);$('acct-amount').value=existing?existing.price:(Math.max(0,s.before)/100).toFixed(2);}
+}
+document.querySelectorAll('[name=acct-mode]').forEach(r=>r.addEventListener('change',()=>{if(r.value==='charge'&&state.charge_account!==true){$('account-dialog').close();openAccount('charge',accountTarget);}else setAccountMode(r.value);}));
+function undoAccountTarget(){if(accountTarget?.primary&&payment==='account'){$('payment-method').value='';payment='';}if(accountTarget?.extra){accountTarget.extra.method='cash';renderExtraPayments();}accountTarget=null;totals();}
+$('acct-cancel')?.addEventListener('click',()=>{$('account-dialog').close();undoAccountTarget();});
+$('account-dialog')?.addEventListener('cancel',()=>undoAccountTarget());
+$('account-form')?.addEventListener('submit',e=>{
+ e.preventDefault();const m=e.currentTarget.querySelector('[name=acct-mode]:checked').value;const amount=fixed($('acct-amount').value,2);
+ if(amount===null||amount<=0){$('acct-message').textContent='Enter an amount greater than $0.00.';$('acct-message').hidden=false;return;}
+ const value=(amount/100).toFixed(2);
+ if(m==='charge'){
+  if(accountTarget?.extra){accountTarget.extra.amount=value;renderExtraPayments();}
+  else if(accountTarget?.primary||!payment||payment==='account'){payment='account';$('payment-method').value='account';$('tendered').value=value;}
+  else if(extraPayments.length<9){extraPayments.push({method:'account',amount:value});renderExtraPayments();}
+ }else{
+  undoAccountTarget();
+  const existing=state.lines.find(l=>l.account_payment);
+  if(existing)existing.price=value;else state.lines.push({item_id:null,account_payment:true,sku:'',item_name:'Payment On Account',description:'Payment On Account',vendor:'',quantity:'1',price:value,tax_rate:'0',on_hand:null});
+  renderLines();
+ }
+ accountTarget=null;dirty=true;$('account-dialog').close();totals();
+});
+// A refund to Account credits the customer's charge account (QB: store credit); no Charge Account dialog.
+async function refundToAccount(target){
+ const undo=()=>{if(target.primary){$('payment-method').value='';payment='';}if(target.extra){target.extra.method='cash';renderExtraPayments();}totals();};
+ if(!state.customer_id){showError('Choose a customer before refunding to Account.');undo();return;}
+ if(state.charge_account===true)return;
+ const customerId=state.customer_id;
+ try{const data=await window.turnOnChargeAccount(customerId,state.customer_name,document.querySelector('[name=csrfmiddlewaretoken]').value);
+  if(!data||state.customer_id!==customerId){undo();return;}
+  state.charge_account=data.charge_account;state.account_balance=data.account_balance;state.account_limit=data.account_limit;
+ }catch(err){undo();showError(err.message);}
+}
+// Accept Return (QB Take Return/Exchange): pick the original receipt, then the items and quantities coming back.
+// Each becomes a negative line at the original price and tax rate; add new items to the same receipt for an exchange.
+const returnDialog=$('return-dialog');let returnReceipt=null;
+function returnMessage(text){$('return-message').textContent=text||'';$('return-message').hidden=!text;}
+function showReturnSearch(){returnReceipt=null;$('return-search-area').hidden=false;$('return-receipt').hidden=true;$('return-add').disabled=true;returnMessage('');$('return-results').replaceChildren();$('return-search').value='';}
+function openReturn(token){if(!returnDialog)return;showReturnSearch();returnDialog.showModal();if(token)loadReturn(token);else $('return-search').focus();}
+async function loadReturn(token){
+ returnMessage('');
+ try{const response=await fetch('/pos/returns/'+encodeURIComponent(token)+'/lines/?exclude='+encodeURIComponent(state.token||''));const data=await response.json().catch(()=>({error:'Could not load that receipt.'}));
+  if(!response.ok){returnMessage(data.error||'Could not load that receipt.');return;}
+  returnReceipt=data;$('return-search-area').hidden=true;$('return-receipt').hidden=false;
+  $('return-receipt-label').textContent=`${data.label} · ${data.date} · ${data.customer_name}`;
+  const body=$('return-lines');body.replaceChildren();
+  if(!data.lines.length){returnMessage('Nothing on this receipt can be returned.');}
+  for(const line of data.lines){
+   const row=document.createElement('tr');const cell=(content,cls)=>{const td=document.createElement('td');if(cls)td.className=cls;if(content instanceof Node)td.append(content);else td.textContent=content;row.append(td);return td;};
+   const pick=document.createElement('input');pick.type='checkbox';pick.setAttribute('aria-label','Return '+(line.item_name||line.description));
+   const qty=document.createElement('input');qty.type='number';qty.min='1';qty.max=line.available;qty.step='1';qty.value=line.available;if(Number(line.available)<1){pick.disabled=true;row.className='returned-all';}qty.className='line-input';qty.disabled=true;qty.setAttribute('aria-label','Return quantity for '+(line.item_name||line.description));
+   const existing=state.lines.find(l=>String(l.returned_from_line)===String(line.id));if(existing){pick.checked=true;qty.disabled=false;qty.value=String(-signed(existing.quantity));}
+   pick.onchange=()=>{qty.disabled=!pick.checked;updateReturnAdd();};qty.oninput=updateReturnAdd;
+   const damaged=document.createElement('input');damaged.type='checkbox';damaged.setAttribute('aria-label',"Damaged — don't restock "+(line.item_name||line.description));
+   if(existing)damaged.checked=existing.damaged===true;
+   const reason=reasonSelect(existing?.return_reason,line.item_name||line.description);const note=noteInput(existing?.return_note,line.item_name||line.description);
+   row._pick={pick,qty,line,damaged,reason,note};
+   cell(pick);cell(line.item_name||line.sku||'');cell(line.description||'');cell(line.sold,'number');cell(line.available,'number');cell(qty,'number');cell('$'+(line.display_price??line.price),'number');cell(reason);cell(note);cell(damaged);
+   body.append(row);
+  }
+  updateReturnAdd();
+ }catch{returnMessage('Could not reach the app server. Check the connection and try again.');}
+}
+function returnPicks(){return [...$('return-lines').children].map(r=>r._pick).filter(p=>p&&p.pick.checked);}
+function updateReturnAdd(){
+ const picks=returnPicks();let problem='';
+ for(const {qty,line} of picks){const n=fixed(qty.value,0);if(n===null||n<1)problem='Enter a return quantity of at least 1.';else if(n>Number(line.available))problem=Number(line.returned)>0?`Only ${line.available} of ${line.item_name||line.description} can still be returned: ${line.returned} of the ${line.sold} sold already came back.`:`Only ${line.sold} of ${line.item_name||line.description} sold on this receipt. Return no more than that.`;}
+ returnMessage(problem);$('return-add').disabled=!picks.length||!!problem;
+}
+if(returnDialog){
+ let timer,controller;
+ $('return-search').addEventListener('input',()=>{clearTimeout(timer);if(controller)controller.abort();const q=$('return-search').value.trim();const results=$('return-results');results.replaceChildren();if(!q)return;
+  timer=setTimeout(async()=>{controller=new AbortController();
+   try{const response=await fetch('/pos/returns/lookup/?q='+encodeURIComponent(q),{signal:controller.signal});if(!response.ok)throw Error();const data=await response.json();if($('return-search').value.trim()!==q)return;results.replaceChildren();
+    for(const r of data.results){const b=document.createElement('button');b.type='button';b.textContent=r.label;const small=document.createElement('small');small.textContent=r.detail;b.append(small);b.onclick=()=>loadReturn(r.token);results.append(b);}
+    if(!data.results.length){const p=document.createElement('p');p.textContent='No matching receipts.';results.append(p);}
+   }catch(err){if(err.name!=='AbortError'){const p=document.createElement('p');p.textContent='Search unavailable. Try again.';results.replaceChildren(p);}}
+  },250);});
+ $('return-other').addEventListener('click',()=>{showReturnSearch();$('return-search').focus();});
+ $('return-cancel').addEventListener('click',()=>returnDialog.close());
+ $('return-add').addEventListener('click',()=>{
+  const data=returnReceipt;if(!data)return;const picks=returnPicks();
+  if(state.lines.length+picks.length>100){returnMessage('A receipt holds at most 100 items.');return;}
+  const onlyReturns=state.lines.every(l=>l.returned_from_line);
+  if(!state.customer_id&&data.customer)selectCustomer(data.customer);
+  if(onlyReturns){state.tax_exempt=data.tax_exempt===true;$('tax-exempt').checked=state.tax_exempt;}
+  for(const {qty,line,damaged,reason,note} of picks){
+   const quantity='-'+String(fixed(qty.value,0));
+   const existing=state.lines.find(l=>String(l.returned_from_line)===String(line.id));
+   if(existing){existing.quantity=quantity;existing.return_limit=line.available;existing.damaged=damaged.checked;existing.return_reason=reason.value;existing.return_note=note.value;continue;}
+   state.lines.push({returned_from_line:line.id,return_receipt:data.number,return_limit:line.available,damaged:damaged.checked,return_reason:reason.value,return_note:note.value,item_id:line.item_id,sku:line.sku,item_name:line.item_name,description:line.description,vendor:line.vendor,quantity,price:line.price,return_discount_percent:line.discount_percent,return_discount_share:line.discount_share,return_sold_amount:line.sold_amount,tax_rate:line.tax_rate,on_hand:line.on_hand});
+  }
+  dirty=true;returnDialog.close();renderLines();
+ });
+}
+document.querySelectorAll('[data-return-open]').forEach(b=>b.addEventListener('click',()=>{b.closest('details')?.removeAttribute('open');openReturn();}));
+document.querySelectorAll('[data-account-open]').forEach(b=>b.addEventListener('click',()=>openAccount(b.dataset.accountOpen||'pay',{})));
+renderExtraPayments();renderShippingChoices();renderCustomer();renderLines();
+if(state.open_account&&!readonly)openAccount(state.open_account,{});
+if(!readonly&&state.return_from)openReturn(state.return_from);else if(!readonly&&state.open_return)openReturn();
+if(new URLSearchParams(location.search).get('print')==='1')window.addEventListener('load',()=>window.print());
+const receiptPrinter=$('receipt-printer'),printCopies=$('print-copies');
+const remember=(el,key)=>{if(!el)return;try{const saved=localStorage.getItem(key);if(saved&&[...el.options].some(o=>o.value===saved))el.value=saved;}catch{}};
+// the printer choice is remembered; the sales order Copies box is not - on every page load it starts at the
+// printer's own number, whatever was picked last time. A stale 'orderCopies' entry from before is cleared.
+// each Letter printer has its own sales order copies (3, or 1 for the office Brother's Tray 3); the box starts
+// at the chosen printer's number and follows a printer change. Staff can still change it for one print.
+remember(receiptPrinter,receiptPrinter?.dataset.remember||'receiptPrinter');try{localStorage.removeItem('orderCopies');}catch{}
+const printerCopies=()=>{const n=receiptPrinter?.selectedOptions[0]?.dataset.copies;if(printCopies&&n&&[...printCopies.options].some(o=>o.value===n))printCopies.value=n;};
+printerCopies();
+const rememberChoice=()=>{try{localStorage.setItem(receiptPrinter.dataset.remember||'receiptPrinter',receiptPrinter.value);}catch{}};
+receiptPrinter?.addEventListener('change',()=>{printerCopies();rememberChoice();});
+async function sendPrint(url){
+ // Direct Print to the chosen printer; returns {message} or {error}.
+ try{
+  const body=new URLSearchParams({printer:receiptPrinter.value});if(printCopies)body.set('copies',printCopies.value);
+  const response=await fetch(url,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value},body});
+  const result=await response.json().catch(()=>({error:'The print request failed. Reload the page and try again.'}));
+  if(!response.ok)return {error:result.error||'The print request failed.'};
+  rememberChoice();return {message:result.message};
+ }catch{return {error:'Could not reach the app server. Check the connection and try again.'};}
+}
+try{const saved=JSON.parse(sessionStorage.getItem('printResult')||'null');sessionStorage.removeItem('printResult');
+ if(saved&&saved.url===location.pathname){if(saved.error)showError(saved.error);else if(saved.message){$('print-message').textContent=saved.message;$('print-message').hidden=false;}}}catch{}
+$('print-receipt')?.addEventListener('click',async()=>{
+ if(dirty){showError('Save your changes before printing.');return;}
+ const button=$('print-receipt');button.disabled=true;$('error').hidden=true;$('print-message').hidden=true;
+ const printed=await sendPrint(button.dataset.url);
+ if(printed.error)showError(printed.error);else{$('print-message').textContent=printed.message;$('print-message').hidden=false;}
+ button.disabled=false;
+});
+})();
+</script>

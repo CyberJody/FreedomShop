@@ -1,0 +1,5 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "setup/base.html" %}
+{% block step %}<h1>No admin login</h1>
+<p class="setup-note">Setup is finished but this shop has no active admin login, so setup can't be opened from the browser. On the server, run <code>manage.py setup --force</code> with <code>--admin</code> to create one.</p>
+{% endblock %}

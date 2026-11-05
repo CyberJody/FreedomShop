@@ -1,0 +1,7 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<table class="settings-table"><thead><tr><th>Data</th><th>Created</th><th>Updated</th><th>Reused</th><th>Skipped</th></tr></thead><tbody>
+{% for kind, counts in summary.count_rows %}<tr><td>{{ kind }}</td><td>{{ counts.created }}</td><td>{{ counts.updated }}</td><td>{{ counts.reused }}</td><td>{{ counts.skipped }}</td></tr>{% endfor %}</tbody></table>
+<p>Opening inventory value added: {{ summary.opening_value|default:'0.00' }}. Opening vouchers: {{ summary.opening_vouchers|default:0 }}.</p>
+<p>Historical receipts with reconciled tenders: {{ summary.receipts_with_tenders|default:0 }}. <strong>Totals-only receipts: {{ summary.receipts_totals_only|default:0 }}</strong> (no payment rows; payment-based reports are incomplete).</p>
+{% for warning in summary.warnings %}<p>{{ warning }}</p>{% endfor %}
+{% if summary.duplicates %}<h3>Possible duplicates — skipped</h3><ul>{% for row in summary.duplicates %}<li>{{ row.kind }} row {{ row.row }}: {{ row.reason }}</li>{% endfor %}</ul>{% endif %}
