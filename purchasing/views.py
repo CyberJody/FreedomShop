@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from shop_settings.permissions import register_can, register_required, refused
 import uuid
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -60,7 +61,7 @@ def catalog(request, section):
     paging = page_context(request, qs)
     scroll = item_scroll_config(request, qs, paging['page'], 'inventory', query, status) if section == 'items' else None
     list_scroll = None if section == 'items' else scroll_config(request, paging['page'], len(fields_by_section[section]))
-    return render(request,'purchasing/catalog.html',dict(title=title,singular=singular,section=section,query=query,status=status,item_scroll_config=scroll,list_scroll_config=list_scroll,scroll_view=request.GET.get('view'),**sorting,**paging))
+    return render(request,'purchasing/catalog.html',dict(title=title,singular=singular,section=section,can_edit=register_can(request, 'edit_' + section),query=query,status=status,item_scroll_config=scroll,list_scroll_config=list_scroll,scroll_view=request.GET.get('view'),**sorting,**paging))
 
 
 def catalog_row(record, section):
@@ -81,6 +82,8 @@ def catalog_row(record, section):
 def catalog_edit(request, section, pk=None):
     if section == 'items':
         return item_edit(request, pk)
+    right = 'edit_' + section
+    if not register_can(request, right): return refused(right)
     model,form_class,title,singular,_=CATALOG[section]
     copied = None
     initial = {}
@@ -127,6 +130,8 @@ def item_lookup(request):
             alternate = next((row for row in item.alternate_vendors.all() if str(row.vendor_id) == vendor), None)
             cost = alternate.order_cost if alternate else None
         results.append(dict(id=item.pk, label=item.display_name, description=item.description, cost=str(cost.quantize(Decimal('.01'),rounding=ROUND_HALF_UP)) if cost is not None else ''))
+    if not register_can(request, 'see_costs'):
+        for row in results: row.pop('cost', None)
     return JsonResponse({'results': results})
 
 
@@ -138,7 +143,10 @@ def row_initial(line, source=None):
 
 @never_cache
 @require_http_methods(['GET','HEAD','POST'])
+@register_required('see_costs')
 def editor(request, kind, token=None):
+    for right in (('edit_costs', 'adjust_stock') if kind == 'voucher' else ('edit_costs',)):
+        if not register_can(request, right): return refused(right)
     doc=get_object_or_404(PurchaseDocument,token=token,kind=kind) if token else None
     po=doc.source_po if doc else None;order=doc.source_order if doc else None
     orders=list(doc.customer_orders) if doc and kind=='po' else (list(po.customer_orders) if po else ([order] if order else []))
@@ -277,6 +285,7 @@ def editor(request, kind, token=None):
 
 @never_cache
 @require_safe
+@register_required('see_costs')
 def document_list(request,section):
     kind,status,title={'orders':('po','open','Purchase Order List'),'history':('voucher','posted','Receiving History'),'held':('voucher','held','Held Vouchers')}[section]
     selected=request.GET.get('status',status)
@@ -409,6 +418,7 @@ def _printable(kind, token):
 
 @never_cache
 @require_safe
+@register_required('see_costs')
 def document_pdf(request, kind, token):
     """The printable PO / receiving voucher as a PDF. Opens in the browser; ?download=1 saves it."""
     from django.http import HttpResponse
@@ -422,6 +432,7 @@ def document_pdf(request, kind, token):
 
 @never_cache
 @require_http_methods(['POST'])
+@register_required('see_costs')
 def document_print(request, kind, token):
     """Render the PDF and send it to the chosen Letter (Brother) printer."""
     from reports.direct_print import letter_printers, print_report

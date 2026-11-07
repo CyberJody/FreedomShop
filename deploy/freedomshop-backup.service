@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [Unit]
-Description=FreedomShop daily backup
+Description=FreedomShop nightly backup, when due by the Backups page schedule
 After=postgresql.service
 Requires=postgresql.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/freedomshop backup --keep 14
+# The time, on/off and retention count are set on the Backups page; this only checks if a run is due.
+ExecStart=/usr/local/bin/freedomshop manage run_scheduled_backup
 Nice=10
 IOSchedulingClass=idle
 PrivateTmp=true

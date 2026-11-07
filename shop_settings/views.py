@@ -205,3 +205,31 @@ def test_receipt(request):
     response = HttpResponse(png_bytes(render_sample_receipt()), content_type='image/png')
     response['Cache-Control'] = 'no-store'
     return response
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD', 'POST'])
+def register_rules_view(request):
+    from accounts.admin_mode import is_admin
+    from django.http import HttpResponseForbidden
+    from .config import register_rules
+    from .forms import RegisterRulesForm
+    from .models import RegisterRules
+    if not is_admin(request):
+        return HttpResponseForbidden('Sign in as an admin to change Register & Sales Rules.', content_type='text/plain')
+    row = register_rules()
+    form = RegisterRulesForm(instance=row, initial={'version': row.version})
+    if request.method == 'POST':
+        with transaction.atomic():
+            row = RegisterRules.objects.select_for_update().get(pk=1)
+            form = RegisterRulesForm(request.POST, instance=row)
+            if form.is_valid():
+                if form.cleaned_data['version'] != row.version:
+                    form.add_error(None, 'Someone changed these rules. Reload before saving.')
+                else:
+                    saved = form.save(commit=False)
+                    saved.version += 1
+                    saved.save()
+                    return redirect('/settings/register/?saved=1')
+    return render(request, 'settings/register.html', {'title': 'Register & Sales Rules', 'form': form,
+                  'saved': request.GET.get('saved') == '1'}, status=400 if request.method == 'POST' else 200)

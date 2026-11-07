@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from shop_settings.permissions import register_can, register_required, refused
 import json
 import uuid
 from urllib.parse import parse_qsl, urlencode, urlsplit
@@ -106,6 +107,12 @@ def customer_edit(request, pk=None):
         version = record.version
         form = CustomerForm(request.POST if request.method == 'POST' else None,
                             instance=record, initial=initial)
+        if not register_can(request, 'manage_charge_accounts'):
+            if request.method == 'POST' and any(k in request.POST for k in ('charge_account', 'account_limit')):
+                return refused('manage_charge_accounts')
+            if not pk: record.charge_account = False
+            form.fields.pop('charge_account', None)
+            form.fields.pop('account_limit', None)
         addresses = CustomerAddressFormSet(request.POST if request.method == 'POST' and 'addresses-TOTAL_FORMS' in request.POST else None, instance=record, prefix='addresses')
         valid = form.is_valid() if request.method == 'POST' else False
         addresses_valid = addresses.is_valid() if addresses.is_bound else True
@@ -141,6 +148,7 @@ def customer_edit(request, pk=None):
 
 @never_cache
 @require_http_methods(['POST'])
+@register_required('manage_charge_accounts')
 def charge_account(request, pk):
     with transaction.atomic():
         customer = get_object_or_404(Customer.objects.select_for_update(), pk=pk)

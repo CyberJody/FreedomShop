@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "shop_settings",
 ]
 MIDDLEWARE = [
+    "shop_settings.middleware.BackupMaintenanceMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -109,3 +110,14 @@ SERVER_CERT_PATHS = [p for p in os.environ.get("FREEDOMSHOP_CERT_PATHS", "").spl
 PIECE_LABEL_PRINTER = ""
 # Shop data outside the code folder: uploads such as the Business Settings logo (MEDIA_ROOT/branding/).
 MEDIA_ROOT = DATA_DIR / "media"
+
+# Backups go to BACKUP_DIR, default DATA_DIR / "backups" worked out at run time so a site
+# settings module that changes DATA_DIR moves them too. See docs/BACKUPS.md.
+
+# Shared by workers; both cache tables are created by migrations.
+CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+          'admin_reauthentication': {'BACKEND': 'accounts.reauth_cache.ReauthenticationCache',
+                                     'LOCATION': 'accounts_adminreauthenticationcache'},
+          'register_overrides': {'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+                                 'LOCATION': 'shop_settings_registeroverridecache', 'TIMEOUT': 900,
+                                 'OPTIONS': {'MAX_ENTRIES': 2147483647, 'CULL_FREQUENCY': 3}}}

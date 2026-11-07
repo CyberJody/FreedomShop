@@ -1,6 +1,6 @@
 # App users and cashier PINs
 
-New installations create the first admin, optional register login and PIN cashiers through `/setup/` or `manage.py setup`. A dedicated Users & PINs management screen is not built yet.
+New installations create the first admin, optional register login and PIN cashiers through `/setup/` or `manage.py setup`. Admins manage logins and cashier PINs through **File → Users & Cashiers** (`/settings/users/`); see [the user guide](../docs/USER-GUIDE.md#users--cashiers). No terminal is needed for routine user maintenance.
 Admin logins belong to the `Admin` group. The shared register login belongs to
 the `register` group and uses `register` as its default username. Cashiers are
 PIN identities, not Django logins. Admin Mode requires membership in `Admin`.

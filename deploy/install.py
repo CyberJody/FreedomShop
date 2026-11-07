@@ -58,15 +58,15 @@ def plan(args):
               + (" libzbar0" if args.with_zbar else "")
               + (" certbot python3-certbot-nginx" if args.https else ""))
     print("Create system user/group freedomshop (no login shell)")
-    print("Create /opt/freedomshop/{releases,current} and /var/lib/freedomshop/{media,backups,uploads}")
+    print("Create /opt/freedomshop/{releases,current} and /var/lib/freedomshop/{media,backups,uploads} (owner freedomshop)")
     print("Generate /etc/freedomshop/secret_key (owner freedomshop, mode 600), preserve it on re-run")
     print("Render /etc/freedomshop/settings_site.py from deploy/settings_site.template.py; preserve existing settings")
     print(f"ALLOWED_HOSTS: {', '.join(hosts(args.allowed_hosts)) if args.allowed_hosts else 'prompt on first install'}")
-    print("Create PostgreSQL role/database freedomshop; peer authentication on /var/run/postgresql")
+    print("Create PostgreSQL role (CREATEDB, not superuser) and database freedomshop; peer authentication on /var/run/postgresql")
     print("Create per-release .venv; pip install -r requirements.lock"
           + (f" --no-index --find-links {args.wheelhouse.resolve()}" if args.wheelhouse else ""))
     print("Run migrate --plan, migrate --noinput, check, collectstatic --noinput as freedomshop")
-    print("Install /usr/local/bin/freedomshop, hardened freedomshop.service and daily backup timer (keep 14)")
+    print("Install /usr/local/bin/freedomshop, hardened freedomshop.service and the backup timer (nightly, keep 14; set on the Backups page)")
     print("Enable nginx HTTP site for supplied LAN hosts; start services; GET /health/")
     if args.https:
         print("Obtain a certificate with certbot --nginx (HTTP-01); enable HTTPS redirects and secure cookies")
@@ -122,11 +122,12 @@ def install(args):
     os.chown(site.config, 0, group.gr_gid)
     site.config.chmod(0o750)
     site.data.mkdir(mode=0o755, parents=True, exist_ok=True)
+    # The app writes its backups here and restores media/uploads by renaming them side by side.
+    shutil.chown(site.data, user="freedomshop", group="freedomshop")
     for name in ("media", "uploads", "uploads/fixes", "backups"):
         folder = site.data / name
         folder.mkdir(mode=0o700 if name == "backups" else 0o750, parents=True, exist_ok=True)
-        if name != "backups":
-            shutil.chown(folder, user="freedomshop", group="freedomshop")
+        shutil.chown(folder, user="freedomshop", group="freedomshop")
     with site.lock():
         key = site.config / "secret_key"
         if not key.exists():
@@ -147,7 +148,10 @@ def install(args):
                               user="postgres", capture_output=True, text=True)
         if result.stdout.strip() != "1":
             site.as_user(["createuser", "--host=/var/run/postgresql", "--username=postgres", "--no-superuser",
-                          "--no-createdb", "--no-createrole", "freedomshop"], user="postgres")
+                          "--createdb", "--no-createrole", "freedomshop"], user="postgres")
+        # Restore creates a new database copy first (docs/BACKUPS.md); never superuser.
+        site.as_user(["psql", "--host=/var/run/postgresql", "--username=postgres", "-c",
+                      "ALTER ROLE freedomshop CREATEDB"], user="postgres", stdout=sys.stderr)
         result = site.as_user(["psql", "--host=/var/run/postgresql", "--username=postgres", "-tAc",
                                "SELECT 1 FROM pg_database WHERE datname='freedomshop'"],
                               user="postgres", capture_output=True, text=True)

@@ -2,6 +2,7 @@
 """Exercise file formats and failure recovery without changing the host install."""
 import importlib.util
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -66,9 +67,25 @@ class PackagingTests(SimpleTestCase):
             path.chmod(0o755)
         return dict(self.environment, PATH=f"{binary}{os.pathsep}{os.environ['PATH']}")
 
-    def cli_backup(self, *arguments, fail=False):
-        return subprocess.run(["bash", str(ROOT / "deploy/freedomshop.sh"), "backup", *arguments],
-                              env=self.command_stubs(fail), capture_output=True, text=True)
+    def snapshot(self, keep=14, fail=False):
+        """The upgrade's rollback snapshot, using stubbed pg_dump/runuser/systemctl."""
+        previous = os.umask(0o077)  # As main() sets it.
+        try:
+            with mock.patch.dict(os.environ, self.command_stubs(fail)):
+                return self.site.backup(keep=keep)
+        finally:
+            os.umask(previous)
+
+    def app_stub(self):
+        """A release python that records the manage.py arguments and answers like the backup command."""
+        venv = self.old / ".venv/bin"
+        venv.mkdir(parents=True)
+        calls = self.base / "manage-calls"
+        (venv / "python").write_text("#!/usr/bin/env python3\nimport json, sys\n"
+                                     f"open({str(calls)!r}, 'a').write(json.dumps(sys.argv[2:]) + '\\n')\n"
+                                     "print(json.dumps({'stamp': '20261105-020000', 'status': 'verified'}))\n")
+        (venv / "python").chmod(0o755)
+        return calls
 
     def test_settings_template_renders_and_imports(self):
         rendered = render_settings((ROOT / "deploy/settings_site.template.py").read_text(),
@@ -86,7 +103,22 @@ class PackagingTests(SimpleTestCase):
         self.assertFalse(module.SECURE_SSL_REDIRECT)
         self.assertFalse(module.SESSION_COOKIE_SECURE)
         self.assertEqual(module.MEDIA_ROOT, self.site.data / "media")
+        self.assertEqual(module.BACKUP_DIR, self.site.data / "backups")
+        self.assertEqual(module.BACKUP_SETTINGS_FILES, [target.resolve(), self.site.config / "secret_key"])
+        self.assertTrue(module.BACKUP_SCHEDULE_ENABLED_DEFAULT)
         self.assertNotIn("@@", rendered)
+
+    def test_units_and_installer_let_the_app_back_up_and_restore(self):
+        # The maintenance flag, backups and restore renames are under the data folder.
+        service = (ROOT / "deploy/freedomshop.service").read_text()
+        self.assertIn("ReadWritePaths=/var/lib/freedomshop\n", service)
+        self.assertIn("ExecStart=/usr/local/bin/freedomshop manage run_scheduled_backup",
+                      (ROOT / "deploy/freedomshop-backup.service").read_text())
+        self.assertIn("OnCalendar=*:0/5", (ROOT / "deploy/freedomshop-backup.timer").read_text())
+        installer = (ROOT / "deploy/install.py").read_text()
+        self.assertIn('"--createdb"', installer)
+        self.assertIn('"ALTER ROLE freedomshop CREATEDB"', installer)
+        self.assertNotIn("--superuser\"", installer)
 
     def test_template_supports_https_and_safe_quoted_paths(self):
         rendered = render_settings((ROOT / "deploy/settings_site.template.py").read_text(),
@@ -100,10 +132,8 @@ class PackagingTests(SimpleTestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 hosts(value)
 
-    def test_backup_cli_produces_four_verified_files_and_persistent_data(self):
-        result = self.cli_backup()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        folder = Path(result.stdout.strip())
+    def test_upgrade_snapshot_produces_four_verified_files_and_persistent_data(self):
+        folder = self.snapshot()
         self.assertEqual({p.name for p in folder.iterdir()}, {*operations.BACKUP_FILES, "SHA256SUMS"})
         operations.verify_files(folder, operations.BACKUP_FILES)
         self.assertEqual(folder.stat().st_mode & 0o777, 0o700)
@@ -116,28 +146,76 @@ class PackagingTests(SimpleTestCase):
         self.site.unpack_backup(folder, restored)
         self.assertEqual((restored / "config/secret_key").read_text(), "only-a-test-secret")
 
-    def test_failed_dump_never_publishes_backup(self):
-        result = self.cli_backup(fail=True)
-        self.assertNotEqual(result.returncode, 0)
+    def test_failed_dump_never_publishes_snapshot(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.snapshot(fail=True)
         self.assertEqual(list(self.site.backups.iterdir()), [])
 
-    def test_backup_retention_preserves_safety_and_unrelated_directories(self):
-        for name in ("20260101T010101000001Z", "20260102T010101000001Z", "before-0.0.9-keep", "personal"):
+    def test_snapshot_retention_preserves_app_backups_safety_and_unrelated_directories(self):
+        for name in ("20260101T010101000001Z", "20260102T010101000001Z", "before-0.0.9-keep", "personal", "20261105-020000"):
             (self.site.backups / name).mkdir(parents=True)
-        result = self.cli_backup("--keep", "1")
-        self.assertEqual(result.returncode, 0, result.stderr)
+        folder = self.snapshot(keep=1)
         self.assertEqual({p.name for p in self.site.backups.iterdir()},
-                         {Path(result.stdout.strip()).name, "before-0.0.9-keep", "personal"})
+                         {folder.name, "before-0.0.9-keep", "personal", "20261105-020000"})
 
-    def test_corrupt_backup_is_rejected_before_restore_commands(self):
-        result = self.cli_backup()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        folder = Path(result.stdout.strip())
+    def test_corrupt_snapshot_is_rejected_before_recovery_touches_the_database(self):
+        folder = self.snapshot()
         (folder / "database.dump").write_text("corrupted")
-        with mock.patch.object(operations, "require_root"), mock.patch.object(self.site, "service") as service:
+        with mock.patch.object(self.site, "service"), mock.patch.object(self.site, "restore_database") as database:
             with self.assertRaises(ValueError):
-                self.site.restore(folder)
-        service.assert_not_called()
+                self.site.recover(folder, self.old)
+        database.assert_not_called()
+
+    def test_cli_backup_runs_the_app_backup_command(self):
+        calls = self.app_stub()
+        result = subprocess.run(["bash", str(ROOT / "deploy/freedomshop.sh"), "backup", "--keep", "3"],
+                                env=self.command_stubs(), capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()), self.site.backups / "20261105-020000")
+        self.assertEqual(json.loads(calls.read_text()), ["backup", "--keep", "3"])
+        result = subprocess.run(["bash", str(ROOT / "deploy/freedomshop.sh"), "backup", "--keep", "0"],
+                                env=self.command_stubs(), capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+
+    def restore_mocks(self, stack):
+        stack.enter_context(mock.patch.object(operations, "require_root"))
+        mocks = {"chown": stack.enter_context(mock.patch.object(operations.shutil, "chown"))}
+        for name in ("manage", "service", "health"):
+            mocks[name] = stack.enter_context(mock.patch.object(self.site, name))
+        stack.enter_context(mock.patch.object(self.site, "active", return_value=True))
+        return mocks
+
+    def test_cli_restore_copies_the_folder_in_then_restores_a_copy_then_switches(self):
+        outside = self.base / "usb" / "20261105-020000"
+        outside.mkdir(parents=True)
+        (outside / "MANIFEST.json").write_text("{}")
+        self.site.backups.mkdir()
+        with ExitStack() as stack:
+            mocks = self.restore_mocks(stack)
+            self.site.app_restore(outside)
+        self.assertTrue((self.site.backups / "20261105-020000/MANIFEST.json").is_file())
+        mocks["chown"].assert_any_call(self.site.backups / "20261105-020000", user="freedomshop", group="freedomshop")
+        self.assertEqual([call.args[1] for call in mocks["manage"].call_args_list],
+                         [["restore_copy", "20261105-020000"], ["switch_over", "20261105-020000", "--yes"]])
+        mocks["service"].assert_called_once_with("restart")
+        mocks["health"].assert_called_once_with()
+
+    def test_cli_restore_refuses_other_folders_and_stops_when_the_switch_fails(self):
+        for folder in (self.base / "usb", self.base / "20261105-02000"):
+            folder.mkdir(parents=True)
+            with self.subTest(folder=folder.name), ExitStack() as stack:
+                mocks = self.restore_mocks(stack)
+                with self.assertRaises(ValueError):
+                    self.site.app_restore(folder)
+                mocks["manage"].assert_not_called()
+        (self.site.backups / "20261105-020000").mkdir(parents=True)
+        with ExitStack() as stack:
+            mocks = self.restore_mocks(stack)
+            mocks["manage"].side_effect = [None, subprocess.CalledProcessError(1, "switch_over")]
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.site.app_restore(self.site.backups / "20261105-020000")
+            mocks["service"].assert_not_called()
+        mocks["chown"].assert_not_called()
 
     def test_archive_traversal_and_links_are_rejected(self):
         for name, link in (("app/../../escaped", False), ("/app/file", False), ("app/link", True)):
@@ -231,28 +309,6 @@ class PackagingTests(SimpleTestCase):
         self.assertEqual(command.call_args_list[1].args[0][:2], ["createdb", "--owner=freedomshop"])
         self.assertIn("--single-transaction", command.call_args_list[2].args[0])
         self.assertIn("stdin", command.call_args_list[2].kwargs)
-
-    def test_failed_restore_recovers_previous_files_secret_and_release(self):
-        result = self.cli_backup()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        backup = Path(result.stdout.strip())
-        # These newer values must survive a failed attempt to restore the older snapshot.
-        (self.site.data / "media/logo.txt").write_text("new logo")
-        (self.site.config / "secret_key").write_text("new-test-secret")
-        with ExitStack() as stack:
-            stack.enter_context(mock.patch.dict(os.environ, self.command_stubs()))
-            stack.enter_context(mock.patch.object(operations, "require_root"))
-            stack.enter_context(mock.patch.object(os, "geteuid", return_value=1000))
-            for name in ("venv", "service", "manage", "collectstatic", "restore_database", "install_cli"):
-                stack.enter_context(mock.patch.object(self.site, name))
-            health = stack.enter_context(mock.patch.object(self.site, "health", side_effect=[RuntimeError("failed"), None]))
-            with self.assertRaises(RuntimeError):
-                self.site.restore(backup)
-            self.assertEqual(health.call_count, 2)
-        self.assertEqual(self.site.current.resolve(), self.old)
-        self.assertEqual((self.site.data / "media/logo.txt").read_text(), "new logo")
-        self.assertEqual((self.site.config / "secret_key").read_text(), "new-test-secret")
-        self.assertTrue(any(p.name.startswith("before-restore-") for p in self.site.backups.iterdir()))
 
     def test_installer_dry_run_is_unprivileged_and_has_no_writes(self):
         before = set(self.base.rglob("*"))

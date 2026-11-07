@@ -18,7 +18,7 @@ function clear(){selected.clear();update();}
 window.freedomshopItemCheckbox=(id,name)=>{const c=document.createElement('input');c.type='checkbox';c.value=String(id);c.className='item-select';c.checked=selected.has(c.value);c.setAttribute('aria-label','Select '+name);c.style.marginRight='8px';c.addEventListener('change',()=>{if(c.checked)selected.add(c.value);else selected.delete(c.value);update();});return c;};
 document.querySelectorAll('[data-item-select]').forEach(cell=>cell.prepend(window.freedomshopItemCheckbox(cell.dataset.itemSelect,cell.textContent.trim())));
 new MutationObserver(()=>update()).observe(viewport.tBodies||viewport,{childList:true,subtree:true});
-function openEditor(url){frame.src=url+(url.includes('?')?'&':'?')+new URLSearchParams({modal:'1',return_to:location.pathname+location.search});changed=false;modal.showModal();}
+function openEditor(url){if(!{{ register_rights.edit_items|yesno:'true,false' }}){showDetails(true);return;}frame.src=url+(url.includes('?')?'&':'?')+new URLSearchParams({modal:'1',return_to:location.pathname+location.search});changed=false;modal.showModal();}
 function close(){modal.close();frame.src='about:blank';if(changed)location.reload();}
 document.getElementById('close-item-editor').onclick=close;modal.addEventListener('cancel',e=>{e.preventDefault();close();});
 // after the pop-up saves, the list reloads and says so ("Item saved" / "Item added") and selects the saved item.

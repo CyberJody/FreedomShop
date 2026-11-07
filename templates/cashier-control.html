@@ -12,8 +12,8 @@
       <option value="">Choose…</option>
       {% for person in pin_cashiers %}<option value="{{ person.pk }}"{% if active_cashier.pk == person.pk %} selected{% endif %}>{{ person.name }}</option>{% endfor %}
     </select>
-    <label for="cashier-pin">4-digit PIN</label>
-    <input id="cashier-pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required style="display:block;font-size:24px;width:9ch;margin:8px 0 12px">
+    <label for="cashier-pin">4–6 digit PIN</label>
+    <input id="cashier-pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" required style="display:block;font-size:24px;width:9ch;margin:8px 0 12px">
     <p id="cashier-error" role="alert" style="color:#a30000"></p>
     <div class="cashier-buttons" style="display:flex;gap:10px;align-items:center;margin-top:6px">
       <button type="submit" class="cashier-btn cashier-primary" style="font:inherit;font-weight:bold;padding:8px 18px;border:1px solid #133725;border-radius:4px;background:#1b4b34;color:#fff;cursor:pointer">Sign in</button>

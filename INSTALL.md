@@ -73,17 +73,35 @@ docker compose ps
 
 The default app address is `http://127.0.0.1:8001` on the server. To reach it from registers, configure the bind address and a trusted reverse proxy. Open that web address and complete `/setup/`, or run `docker compose run --rm app manage.py setup`. The entrypoint runs migrations before starting the app. Do not expose PostgreSQL to the register network. Keep persistent database and upload volumes when replacing containers; `docker compose down -v` removes volumes and is not an upgrade step.
 
-The app container must be able to reach network printers. A printer at `127.0.0.1` inside a container means that container, not the server's USB printer service. Use a reachable host address or the networking arrangement documented with the release. Apply the HTTPS options below at the reverse proxy.
+The app container must be able to reach supported network printers. A printer at `127.0.0.1` inside a container means that container. Use a reachable printer address. Apply the HTTPS options below at the reverse proxy.
 
-## Printers
+## Supported printers
+
+The tested status in these printer and scanner lists reflects established built-in support; this documentation update includes no new hardware testing.
+
+Printers, tested: Star Micronics TSP143IIILAN (receipts); Zebra GX420t (labels); Brother MFC-L8900CDW (letter documents, tray selection).
+
+Printers, should work (untested): other Star TSP100-series LAN receipt printers; ZPL Zebra label printers (e.g. ZD-series); IPP Everywhere / AirPrint letter printers. Other ESC/POS receipt printers may need adjustment.
+
+Everything else: print the PDF from the browser; USB receipt printers or custom setups — contact TechQuest for a custom solution.
+
+The server sends direct print jobs to supported network printers. Browser Print and available PDF downloads offer a separate route through the workstation. Receipt-printer setup in the wizard is optional; Letter and Zebra printers are added on the Printers screen.
 
 Open **File → Printers**. Add a name, kind, host and port, then save. Only send a test page when the intended printer is connected and ready.
 
-- **Receipt:** an ESC/POS-compatible network receipt printer using raw TCP, usually port `9100`.
-- **Letter:** an IPP printer supporting the app's PWG raster output, normally port `631` at `/ipp/print`. Choose the paper tray, color option and order-copy count as needed. Check compatibility with the intended hardware.
-- **Zebra labels:** a ZPL-compatible printer using raw TCP, usually port `9100`. Item tags are designed for 3 × 4 inch stock. A USB printer needs a separately configured raw-print bridge reachable by the app; entering a USB device path is not supported.
+- **Receipt:** raw TCP, usually port `9100`.
+- **Letter:** IPP with the app's PWG raster output, normally port `631` at `/ipp/print`. Choose the paper tray, color option and order-copy count as needed.
+- **Zebra labels:** ZPL over raw TCP, usually port `9100`. Item tags are designed for 3 × 4 inch stock.
 
-The server sends direct print jobs. Browser Print and available PDF downloads offer a separate route through the workstation. Receipt-printer setup in the wizard is optional; Letter and Zebra printers are added on the Printers screen.
+## Supported barcode scanners
+
+Scanners, tested: generic USB barcode scanner in keyboard (HID) mode.
+
+Scanners, should work: any USB or Bluetooth scanner in keyboard (HID) mode that sends Enter after each scan; 2D scanners for QR codes.
+
+Scanner notes: no driver needed; it types into the focused field.
+
+The tested scanner supports the app's QR serial labels. Use a 2D scanner for QR codes, including on Scanner Test. The scan boxes on Truck Receiving and Scanner Test take focus automatically.
 
 ## HTTPS
 
@@ -110,20 +128,22 @@ For Compose, back up the database, uploads and deployment configuration first. R
 
 ## Backup and restore
 
-On native installs:
+Administrators can use **File → Backups** (`/settings/backups/`) to back up now, download a backup, set the nightly schedule and retention, and restore. [docs/BACKUPS.md](docs/BACKUPS.md) describes all of it. On native installs the same core is available from the shell:
 
 ```sh
-sudo freedomshop backup
+sudo freedomshop backup [--keep N]
 ```
 
-The command briefly pauses the app for a consistent snapshot, then prints a backup directory under `/var/lib/freedomshop/backups`. It contains `database.dump`, `settings_site.py`, `app.tar.gz` and `SHA256SUMS`. The archive includes the matching application code, the secret key, logos and Notes & Requests uploads. Keep any separately customized nginx configuration and certificates too. The daily timer retains 14 routine backups; safety backups from upgrades and restores are kept separately.
+This runs the app's `manage.py backup` as the `freedomshop` user, verifies the result and prints its folder, `/var/lib/freedomshop/backups/YYYYMMDD-HHMMSS/`. The folder contains `db.dump` (`pg_dump -Fc`), `media.tar.gz` (logos and Notes & Requests uploads), `settings.tar.gz` (`settings_site.py` and the secret key), `MANIFEST.json` and `SHA256SUMS`. `--keep N` afterwards keeps only the newest N verified scheduled backups. The installed `freedomshop-backup.timer` checks every five minutes whether the Backups page schedule is due. On a new native install, backups run nightly at 02:00 and keep 14 scheduled backups. Manual and safety backups are never deleted automatically. Keep any separately customized nginx configuration and certificates too.
 
-Store an encrypted copy off the server and rehearse recovery on a separate installation. Preserve the database's shop exchange identity when restoring or moving the same shop. To restore a complete backup set, schedule downtime, block staff writes and run:
+Store an encrypted copy off the server and rehearse recovery on a separate installation. Preserve the database's shop exchange identity when restoring or moving the same shop. To restore a backup folder (one under the backups folder, or one copied from elsewhere, which is copied in first), run:
 
 ```sh
-sudo freedomshop restore /path/to/backup-directory
+sudo freedomshop restore /path/to/YYYYMMDD-HHMMSS
 ```
 
-The restore command validates the backup, prepares its matching application environment, takes a safety backup, then restores the database, site settings, secret and uploaded files. It switches to the restored release and checks health. Dependency installation requires network access or a prepared wheelhouse; see `freedomshop restore --help`. Recovery replaces current records with the selected snapshot, so later changes are lost.
+The restore uses the installed release; it does not install other code, so `--wheelhouse` is accepted but not needed. It verifies the backup and restores it into a new database copy, checking it while the live shop keeps running. It then switches over: the shop shows a maintenance page, a fresh safety backup must verify, and the database, uploads and changed settings are swapped in. On any failure the live data stays as it was and the command says where it stopped. A backup from a different application version (other migrations) is refused; restore it with the matching release. Settings files the app cannot write (`/etc/freedomshop`) are kept as they are and listed in the report. The service restarts afterwards so every worker loads the restored data. Recovery replaces current records with the selected snapshot, so later changes are lost.
 
-After recovery, check `/health/`, sign-in, business and tax settings, document totals, uploads and the exchange shop identity. Reopen access only after those checks succeed. Compose recovery uses the same database-and-files approach with its persistent volumes; use the release's service names and volume paths rather than native systemd commands.
+`freedomshop upgrade` still takes its own rollback snapshot (`before-VERSION-…`, including the release code) so a failed upgrade can return to the previous release and database together.
+
+After recovery, check `/health/`, sign-in, business and tax settings, document totals, uploads and the exchange shop identity. Reopen access only after those checks succeed. On Compose, use the Backups page or `docker compose exec app python manage.py backup` (and `restore_copy` / `switch_over`); backups live in the `app-data` volume, so copy them off the server too.

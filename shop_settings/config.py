@@ -360,3 +360,19 @@ def apply_time_zone():
         time.tzset()
     timezone.get_default_timezone.cache_clear()
     return name
+
+
+def register_rules():
+    """Saved register policy, with the same transaction/request invalidation as Business."""
+    from .models import RegisterRules
+    cache = _settings_cache()
+    if 'register_rules' not in cache:
+        defaults = getattr(settings, 'REGISTER_RULES_TEST_DEFAULTS', {})
+        try:
+            row, _ = RegisterRules.objects.get_or_create(pk=1, defaults=defaults)
+        except AssertionError:
+            if not getattr(settings, 'REGISTER_RULES_TEST_ANONYMOUS', False):
+                raise
+            return RegisterRules(**defaults)
+        cache['register_rules'] = row
+    return cache['register_rules']

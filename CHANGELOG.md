@@ -6,6 +6,10 @@ Notable changes to FreedomShop · Point of Sale are recorded here. This file fol
 
 ### Added
 
+- Admin-only Users & Cashiers settings with password confirmation, last-admin protection, hashed PINs and an audit trail.
+- Admin Register & Sales Rules: walk-in sales, register rights, cost privacy, discount reasons and audited single-use manager approval.
+- Supported printer and barcode scanner lists in the installation guide, distinguishing tested hardware from expected compatibility and documenting PDF/browser printing for other printers.
+
 - Register workflows: sales, split tenders, returns, discounts, gift certificates, held receipts and pickup tracking.
 - Sales orders and layaways using deposits, refunds and partial pickups.
 - Customers, charge accounts, limits, credits and payments on account.
@@ -21,9 +25,11 @@ Notable changes to FreedomShop · Point of Sale are recorded here. This file fol
 - Installation and user guides, Contributor License Agreement (CLA) with a signing check, security policy, Code of Conduct and dependency notices.
 - About page with the version, license, credits and where to find free or paid help.
 - Debian/Ubuntu package and container image builds in the manual release workflow.
+- Backups page and commands: verified backups of the database, attachments and settings, downloads, nightly retention, and restore into a new copy followed by a confirmed switch-over behind a fresh safety backup.
 
 ### Changed
 
+- `freedomshop backup` and `freedomshop restore` use the app's verified backup folders and its restore-into-a-copy, then switch-over; the native backup timer follows the Backups page schedule.
 - Product identity is FreedomShop, with Point of Sale as its subtitle.
 - Business names on shop documents come from Business Settings.
 - Installation settings and test examples use generic configuration and generated data.

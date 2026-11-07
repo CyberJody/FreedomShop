@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Editable inventory screens."""
+from shop_settings.permissions import register_can, register_required, restrict_item_form, refused
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import IntegrityError, transaction
@@ -45,7 +46,7 @@ GROUPS = {
 def field_groups(form):
     return {group + '_fields': [dict(field=form[name], name=name, label=form[name].label,
         known=False, value=None, checkbox=form[name].field.widget.input_type == 'checkbox'
-        if hasattr(form[name].field.widget, 'input_type') else False) for name in names]
+        if hasattr(form[name].field.widget, 'input_type') else False) for name in names if name in form.fields]
         for group, names in GROUPS.items()}
 
 
@@ -103,6 +104,7 @@ def same_name_message(skus):
 
 @never_cache
 @require_safe
+@register_required('edit_items')
 def item_name_check(request):
     """the item form asks before saving a name another active item already uses (the server re-checks on save)."""
     from django.http import JsonResponse
@@ -168,11 +170,12 @@ def new_item_form_data():
 
 @never_cache
 @require_http_methods(['POST'])
+@register_required('edit_items', 'edit_prices')
 def special_order_item(request):
     """(matching QB's Add New Special Order Item): create a real inventory item from the sales order screen and
     hand it back as an item-search result, so the order gets an ordinary item line and Generate PO fills in the item,
     vendor, description and cost. Same rules as the Item List's Add Item (ItemForm + save_item_form: next item number,
-    on-hand starts at 0 and duplicate names require confirmation). Any signed-in user who can make a sales order may use it."""
+    on-hand starts at 0 and duplicate names require confirmation). Requires item and catalog-price rights, and cost rights when supplying a cost."""
     import json
     from django.http import JsonResponse
     from sales.models import plain
@@ -188,6 +191,8 @@ def special_order_item(request):
     data = new_item_form_data()
     data.update(name=text('name'), description=text('description'), department=text('department'),
                 primary_vendor=text('vendor'), order_cost=text('cost'), price=text('price'))
+    if text('cost') and not register_can(request, 'edit_costs'):
+        return refused('edit_costs')
     if not data['price']:
         return JsonResponse({'error': 'Enter the price for this special order item.', 'field': 'price'}, status=400)
     from .models import Department
@@ -223,6 +228,7 @@ def special_order_item(request):
 @never_cache
 @xframe_options_sameorigin
 @require_http_methods(['GET', 'HEAD', 'POST'])
+@register_required('edit_items')
 def item_edit(request, pk=None):
     modal = request.GET.get('modal') == '1'
     return_to = item_return_url(request.POST.get('return_to', request.GET.get('return_to', '')))
@@ -239,6 +245,8 @@ def item_edit(request, pk=None):
         initial['on_hand'] = Decimal('0')
     with transaction.atomic():
         item = get_object_or_404(Item.objects.select_for_update(), pk=pk) if pk else Item()
+        if not pk and not register_can(request, 'adjust_stock'):
+            item.on_hand = Decimal('0')
         if copied: item.photo = copied.photo
         version = item.version
         original_stock, original_cost = item.on_hand, item.average_cost
@@ -247,9 +255,16 @@ def item_edit(request, pk=None):
         same_name = None
         form = ItemForm(request.POST if request.method == 'POST' else None,
                         request.FILES if request.method == 'POST' else None, instance=item, initial=initial)
+        denied = restrict_item_form(request, form)
+        if denied is not None: return denied
         vendors_data = request.POST if request.method == 'POST' and 'vendors-TOTAL_FORMS' in request.POST else None
         vendor_initial = [dict(vendor=v.vendor_id,order_cost=v.order_cost,upc=v.upc,alu=v.alu) for v in copied.alternate_vendors.all()] if copied and request.method != 'POST' else None
         vendors = ItemVendorFormSet(vendors_data, instance=item, prefix='vendors', initial=vendor_initial)
+        if not register_can(request, 'edit_costs') or not register_can(request, 'see_costs'):
+            if vendors_data is not None and any(k.endswith('-order_cost') for k in vendors_data):
+                return refused('edit_costs')
+            for vendor_form in [*vendors.forms, vendors.empty_form]:
+                vendor_form.fields.pop('order_cost', None)
         if request.method == 'POST':
             valid = form.is_valid()
             vendors_valid = vendors.is_valid() if vendors_data is not None else True
@@ -363,7 +378,8 @@ def item_details(request, pk):
             value = detail_value(item, name)
             if name == 'average_cost' and item.average_cost is None:
                 value = item.average_cost_missing_label  # "Not received yet" for a new item, "Unverified" for an unknown count
-            rows.append(dict(label=labels[name].label if name in labels.fields else name, value=value))
+            if name not in ('average_cost', 'order_cost') or register_can(request, 'see_costs'):
+                rows.append(dict(label=labels[name].label if name in labels.fields else name, value=value))
             if name == 'average_cost':
                 rows.append(dict(label='On Hand Qty', value=detail_value(item, 'on_hand') if item.on_hand is not None else 'Unverified',
                                  button='available', button_label='Available'))

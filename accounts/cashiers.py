@@ -2,7 +2,7 @@
 """Who is ringing: the active cashier for the signed-in session.
 
 - Admin logins ARE the cashier (their own name, no PIN) —.
-- Under the shared register login, staff pick their name in the Cashier pop-up and type their 4-digit PIN. The PIN is
+- Under the shared register login, staff pick their name in the Cashier pop-up and type their 4–6 digit PIN. The PIN is
   checked against the chosen cashier only. A PIN never authenticates a Django user and never grants Admin Mode.
 - Lockouts: 10 wrong PINs in 15 minutes lock that cashier; 20 wrong PINs in 15 minutes from one signed-in session lock
   the pop-up at that register, so one register cannot try every name in turn.
@@ -125,7 +125,7 @@ def switch(request):
         if person.failures >= USER_LIMIT:
             return JsonResponse({'error': f'Too many unsuccessful attempts for {chosen.name}. '
                                           'Please try again in 15 minutes.'}, status=429)
-        if re.fullmatch(r'[0-9]{4}', pin) and check_password(pin, chosen.pin_hash):
+        if re.fullmatch(r'[0-9]{4,6}', pin) and check_password(pin, chosen.pin_hash):
             found = chosen
         person.failures = 0 if found else person.failures + 1
         register.failures = 0 if found else register.failures + 1

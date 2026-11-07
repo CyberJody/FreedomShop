@@ -29,6 +29,7 @@ else:
     from release import version_from_text
 
 STAMP = re.compile(r"\d{8}T\d{12}Z")
+APP_STAMP = re.compile(r"\d{8}-\d{6}")  # The app's backups: docs/BACKUPS.md
 BACKUP_FILES = ("app.tar.gz", "database.dump", "settings_site.py")
 
 
@@ -130,7 +131,8 @@ class Installation:
                 self.service("start")
 
     def backup(self, keep=14, prefix=""):
-        """Four files; app.tar.gz also includes persistent media, uploads and secret."""
+        """Upgrade rollback snapshot. Four files; app.tar.gz also includes the release code,
+        persistent media, uploads and secret, so a failed upgrade can return to the old release."""
         if keep < 1:
             raise ValueError("--keep must be at least 1")
         release = self.current.resolve(strict=True)
@@ -344,45 +346,49 @@ class Installation:
             # Preserve failed code for diagnosis; never activate it on a re-run.
             raise
 
-    def restore(self, backup, wheelhouse=None):
+    def app_backup(self, keep=None):
+        """The app's verified backup: backups/<stamp>/{db.dump, media.tar.gz, settings.tar.gz, MANIFEST.json, SHA256SUMS}."""
+        if keep is not None and keep < 1:
+            raise ValueError("--keep must be at least 1")
+        release = self.current.resolve(strict=True)
+        arguments = ["backup", *(["--keep", str(keep)] if keep is not None else [])]
+        result = self.as_user([str(release / ".venv/bin/python"), str(release / "manage.py"), *arguments],
+                              cwd=release, env=self.environment(release), stdout=subprocess.PIPE, text=True)
+        return self.backups / json.loads(result.stdout)["stamp"]
+
+    def app_restore(self, backup, wheelhouse=None):
+        """Restore into a new copy, then switch over behind a fresh verified safety backup.
+
+        The app shows its maintenance page meanwhile; the live data stays untouched on any failure."""
         require_root()
-        backup = backup.resolve(strict=True)
-        old = self.current.resolve(strict=True)
-        self.backups.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix=".restore-", dir=self.backups) as folder:
-            unpacked = Path(folder)
-            self.unpack_backup(backup, unpacked)  # Validate before stopping the shop.
-            release = self.releases / f"restored-{stamp()}"
-            shutil.move(str(unpacked / "app"), release)
-            self.venv(release, wheelhouse)
-            self.service("stop")
-            safety = None
-            try:
-                safety = self.backup(prefix="before-restore-")
-                log(f"Pre-restore backup: {safety}")
-                self.restore_database(backup)
-                self.restore_files(backup, unpacked)
-                self.manage(release, ["check"])
-                self.collectstatic(release)
-                self.switch(release)
-                self.service("start")
-                self.health()
-                self.install_cli(release)
-            except BaseException:
-                if safety:
-                    self.recover(safety, old)
-                else:
-                    self.service("start")
-                raise
+        source = backup.resolve(strict=True)
+        if not (APP_STAMP.fullmatch(source.name) and source.is_dir()):
+            raise ValueError("Expected an app backup folder named YYYYMMDD-HHMMSS")
+        if wheelhouse:
+            log("--wheelhouse is not needed: the restore uses the installed release")
+        target = self.backups / source.name
+        if source != target:
+            if target.exists():
+                raise ValueError(f"{target} already exists; restore that folder instead")
+            shutil.copytree(source, target)
+            for path in [target, *target.rglob("*")]:
+                shutil.chown(path, user="freedomshop", group="freedomshop")
+        release = self.current.resolve(strict=True)
+        self.manage(release, ["restore_copy", source.name])
+        self.manage(release, ["switch_over", source.name, "--yes"])
+        if self.active():
+            self.service("restart")  # Every worker loads any restored settings.
+            self.health()
 
 
 def main():
     parser = argparse.ArgumentParser(description="FreedomShop native installation maintenance")
     commands = parser.add_subparsers(dest="command", required=True)
-    backup = commands.add_parser("backup", help="Pause the app and back up code, files, settings and database")
-    backup.add_argument("--keep", type=int, default=14, help="Keep this many routine backups (default 14)")
+    backup = commands.add_parser("backup", help="Back up the database, attachments and settings, verified")
+    backup.add_argument("--keep", type=int, help="Afterwards keep only this many scheduled backups")
     for name, argument in (("upgrade", "archive"), ("restore", "backup")):
-        child = commands.add_parser(name)
+        child = commands.add_parser(name, help="Restore a backup folder: new copy first, then switch over"
+                                    if name == "restore" else None)
         child.add_argument(argument, type=Path)
         child.add_argument("--wheelhouse", type=Path, help="Install dependencies offline from this directory")
     commands.add_parser("status")
@@ -402,11 +408,11 @@ def main():
     else:
         with installation.lock():
             if args.command == "backup":
-                print(installation.backup(keep=args.keep))
+                print(installation.app_backup(keep=args.keep))
             elif args.command == "upgrade":
                 installation.upgrade(args.archive, args.wheelhouse)
             elif args.command == "restore":
-                installation.restore(args.backup, args.wheelhouse)
+                installation.app_restore(args.backup, args.wheelhouse)
 
 
 if __name__ == "__main__":

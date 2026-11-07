@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Delete (deactivate) a customer, vendor or department from its list without breaking saved history; items go to the Items Trash."""
+from shop_settings.permissions import register_can, refused
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render, redirect
@@ -15,6 +16,8 @@ from purchasing.models import Vendor, Department
 @transaction.atomic
 def remove_record(request, section, pk):
     models={'customers':Customer,'items':Item,'vendors':Vendor,'departments':Department}
+    if section in ('items', 'vendors', 'departments') and not register_can(request, 'edit_' + section):
+        return refused('edit_' + section)
     model=models.get(section)
     if not model: raise Http404
     if section=='items': return redirect(f'/purchasing/items/delete/?item={pk}')  # Items Trash

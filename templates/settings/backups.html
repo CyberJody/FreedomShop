@@ -1,0 +1,17 @@
+{% extends "settings/base.html" %}
+{% load tz %}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% block content %}{% timezone TIME_ZONE %}<div class="settings-wrap">
+{% if saved %}<p class="success" role="status">{% if saved == 'backup' %}Backup written and verified.{% elif saved == 'discard' %}Restore copy discarded.{% else %}Backup schedule saved.{% endif %}</p>{% endif %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<section class="settings-panel"><h2>Backups</h2><p>Save the database, attachments and settings together. Downloaded backups may contain private shop data and credentials; keep them secure.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="create"><button class="button primary">Back up now</button></form>
+<table class="settings-table"><thead><tr><th>Date</th><th>Reason</th><th>Size</th><th>Verified</th><th>Download / restore</th></tr></thead><tbody>
+{% for backup in backups %}<tr><td>{{ backup.created_at|date:"Y-m-d H:i:s T" }}<br><small>{{ backup.stamp }}</small></td><td>{{ backup.reason }}</td><td>{{ backup.size|filesizeformat }}</td>
+<td>{% if backup.status == 'verified' %}✓ Verified{% else %}✗ Failed{% endif %}{% if backup.error %}<p class="error">{{ backup.error }}</p>{% endif %}</td><td>
+{% if backup.status == 'verified' %}<a href="{% url 'backup-download' backup.stamp %}">Download .tar</a><details><summary>SHA-256</summary><code style="overflow-wrap:anywhere">{{ backup.download_sha256 }}</code></details>
+{% if not backup.restore_report %}<form method="post" action="{% url 'backup-copy' backup.stamp %}">{% csrf_token %}<button class="button">Restore into a copy…</button></form>{% endif %}{% endif %}
+{% if backup.restore_report %}<a href="{% url 'backup-report' backup.stamp %}">Restore report</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="5">No backups yet.</td></tr>{% endfor %}</tbody></table></section>
+<section class="settings-panel"><h2>Nightly backup</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="schedule">{{ form.as_p }}<p>Time zone: {{ TIME_ZONE|default:"shop time zone" }}. Only scheduled backups beyond the retention count are deleted, after a new backup verifies. Manual and safety backups are kept.</p><button class="button">Save schedule</button></form>
+<p>Last run: {{ schedule.last_run|date:"Y-m-d H:i T"|default:"Never" }}{% if schedule.last_error %} — <span class="error">{{ schedule.last_error }}</span>{% endif %}<br>Next run: {{ next_run|date:"Y-m-d H:i T"|default:"Off" }}</p><p class="helptext">The server timer must invoke run_scheduled_backup. Saving this setting does not install a timer.</p></section>
+</div>{% endtimezone %}{% endblock %}

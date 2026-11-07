@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [Unit]
-Description=Back up FreedomShop daily
+Description=Check the FreedomShop nightly backup schedule
 
 [Timer]
-OnCalendar=*-*-* 02:30:00
+OnCalendar=*:0/5
 Persistent=true
-RandomizedDelaySec=300
 
 [Install]
 WantedBy=timers.target
