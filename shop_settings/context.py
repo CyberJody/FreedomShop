@@ -4,4 +4,8 @@ from .config import business, tax
 
 
 def context(request):
-    return {'business': business(), 'shop_tax': tax()}
+    from .permissions import register_can
+    from .models import REGISTER_RIGHTS
+    from .config import register_rules
+    return {'business': business(), 'shop_tax': tax(), 'register_rules': register_rules(),
+            'register_rights': {right: register_can(request, right) for right in REGISTER_RIGHTS}}

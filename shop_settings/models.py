@@ -173,3 +173,75 @@ class Business(models.Model):
     @property
     def order_policy(self):
         return self.order_return_policy or self.return_policy
+
+
+class Backup(models.Model):
+    stamp = models.CharField(primary_key=True, max_length=15)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reason = models.CharField(max_length=12, choices=[(v, v.title()) for v in ('manual', 'scheduled', 'safety')])
+    size = models.PositiveBigIntegerField(default=0)
+    status = models.CharField(max_length=10, default='failed', choices=[('verified', 'Verified'), ('failed', 'Failed')])
+    error = models.TextField(blank=True)
+    path = models.CharField(max_length=1000)
+    download_sha256 = models.CharField(max_length=64, blank=True)
+    restore_report = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-stamp']
+
+
+class BackupSchedule(models.Model):
+    # Singleton; the scheduler also holds a filesystem lock across the due check and run.
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    enabled = models.BooleanField(default=False)
+    time = models.TimeField(default=time(2, 0))
+    retention = models.PositiveSmallIntegerField(default=14, validators=[MinValueValidator(1), MaxValueValidator(3650)])
+    last_attempt_day = models.DateField(null=True, blank=True)
+    last_run = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+
+class RestoreLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    backup = models.ForeignKey(Backup, on_delete=models.PROTECT, related_name='restore_logs')
+    created_at = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=12)
+    status = models.CharField(max_length=20)
+    step = models.CharField(max_length=80)
+    safety_stamp = models.CharField(max_length=15, blank=True)
+    report = models.JSONField(default=dict)
+    error = models.TextField(blank=True)
+
+REGISTER_RIGHTS = ('edit_prices', 'edit_costs', 'see_costs', 'adjust_stock', 'edit_items',
+                   'edit_vendors', 'edit_departments', 'manage_charge_accounts', 'receipt_discounts')
+
+
+class RegisterRules(models.Model):
+    """One saved policy row. Admin rights are unconditional; PIN identities use their login's rights."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    require_customer = models.BooleanField(default=False, verbose_name='Require a customer on every sale')
+    edit_prices = models.BooleanField(default=False)
+    edit_costs = models.BooleanField(default=False)
+    see_costs = models.BooleanField(default=False)
+    adjust_stock = models.BooleanField(default=False)
+    edit_items = models.BooleanField(default=False)
+    edit_vendors = models.BooleanField(default=False)
+    edit_departments = models.BooleanField(default=False)
+    manage_charge_accounts = models.BooleanField(default=False)
+    receipt_discounts = models.BooleanField(default=True)
+    discount_override_enabled = models.BooleanField(default=False)
+    discount_override_percent = models.PositiveSmallIntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    require_discount_reason = models.BooleanField(default=False, verbose_name='Require a discount reason')
+    version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(pk=1), name='register_rules_singleton'),
+                       models.CheckConstraint(condition=models.Q(discount_override_percent__lte=100), name='register_override_percent_range')]
+
+
+class RegisterOverrideCache(models.Model):
+    """Shared cache schema for approval failure counters and their short serialization locks."""
+    cache_key = models.CharField(max_length=255, primary_key=True)
+    value = models.TextField()
+    expires = models.DateTimeField(db_index=True)

@@ -1,0 +1,42 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "settings/base.html" %}
+{% block content %}<div class="settings-wrap">
+<h1>Users &amp; Cashiers</h1>
+{% include "settings/users-notice.html" %}
+<section class="settings-panel" aria-labelledby="logins-heading">
+<h2 id="logins-heading">Logins</h2>
+<p>Admins manage the shop. Register logins are shared by staff who identify themselves with a cashier PIN.</p>
+<p><a class="button" href="{% url 'users-login-add' %}">Add login</a></p>
+<table class="settings-table"><thead><tr><th scope="col">Username</th><th scope="col">Role</th><th scope="col">Active</th><th scope="col">Last login</th><th scope="col">Actions</th></tr></thead><tbody>
+{% for row in logins %}<tr{% if not row.user.is_active %} class="retired"{% endif %}>
+<td>{{ row.user.username }}{% if row.user.pk == request.user.pk %} (you){% endif %}</td><td>{{ row.role }}</td>
+<td>{{ row.user.is_active|yesno:"Yes,No" }}</td><td>{{ row.user.last_login|date:"Y-m-d H:i"|default:"Never" }}</td>
+<td><div class="actions">
+<a href="{% url 'users-login-change' row.user.pk 'rename' %}">Rename</a>
+<a href="{% url 'users-login-change' row.user.pk 'password' %}">Reset password</a>
+<a href="{% url 'users-login-change' row.user.pk 'role' %}">Change role</a>
+{% if row.user.is_active %}<a href="{% url 'users-login-change' row.user.pk 'disable' %}">Disable</a>{% else %}<a href="{% url 'users-login-change' row.user.pk 'enable' %}">Enable</a>{% endif %}
+<a href="{% url 'users-login-change' row.user.pk 'delete' %}">Delete</a>
+</div></td></tr>{% empty %}<tr><td colspan="5">No logins.</td></tr>{% endfor %}
+</tbody></table>
+<p class="helptext">The last active admin is protected. You cannot disable or delete your own login or remove your own admin role. Changes to admin logins require your current password.</p>
+</section>
+<section class="settings-panel" aria-labelledby="cashiers-heading">
+<h2 id="cashiers-heading">Cashiers</h2><p>Cashiers use a 4–6 digit PIN under a register login. PINs do not grant admin access.</p>
+<p><a class="button" href="{% url 'users-cashier-add' %}">Add cashier</a></p>
+<table class="settings-table"><thead><tr><th scope="col">Name</th><th scope="col">Active</th><th scope="col">Actions</th></tr></thead><tbody>
+{% for cashier in cashiers %}<tr{% if not cashier.active %} class="retired"{% endif %}><td>{{ cashier.name }}</td><td>{{ cashier.active|yesno:"Yes,No" }}</td><td><div class="actions">
+<a href="{% url 'users-cashier-change' cashier.pk 'rename' %}">Rename</a>
+<a href="{% url 'users-cashier-change' cashier.pk 'pin' %}">Reset PIN</a>
+{% if cashier.active %}<a href="{% url 'users-cashier-change' cashier.pk 'disable' %}">Disable</a>{% else %}<a href="{% url 'users-cashier-change' cashier.pk 'enable' %}">Enable</a>{% endif %}
+<a href="{% url 'users-cashier-change' cashier.pk 'remove' %}">Remove</a>
+</div></td></tr>{% empty %}<tr><td colspan="3">No cashiers.</td></tr>{% endfor %}
+</tbody></table><p class="helptext">Remove deletes an unused cashier. A cashier with sales, payments or pickup history is disabled instead. Renaming keeps the names on earlier transactions.</p>
+</section>
+<section class="settings-panel" aria-labelledby="audit-heading"><h2 id="audit-heading">Recent user changes</h2>
+<p>The last 50 changes to logins and cashiers. Times use the shop’s time zone. Passwords and PINs are never shown.</p>
+<table class="settings-table"><thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th><th scope="col">Target</th><th scope="col">Before → After</th><th scope="col">IP</th></tr></thead><tbody>
+{% for entry in entries %}<tr><td>{{ entry.when|date:"Y-m-d H:i:s" }}</td><td>{{ entry.actor_name }}</td><td>{{ entry.action }}</td><td>{{ entry.target }}</td>
+<td>{{ entry.details.before|default_if_none:"—" }} → {{ entry.details.after|default_if_none:"—" }}</td><td>{{ entry.ip|default_if_none:"—" }}</td></tr>
+{% empty %}<tr><td colspan="6">No user changes recorded yet.</td></tr>{% endfor %}</tbody></table></section>
+</div>{% endblock %}

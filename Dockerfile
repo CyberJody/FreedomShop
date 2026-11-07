@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_SETTINGS_MODULE=deploy.docker_settings \
     FREEDOMSHOP_DATA_DIR=/var/lib/freedomshop
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libzbar0 \
+    && apt-get install -y --no-install-recommends ca-certificates libzbar0 postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 freedomshop \
     && useradd --uid 10001 --gid freedomshop --no-create-home --shell /usr/sbin/nologin freedomshop

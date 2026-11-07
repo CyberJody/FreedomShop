@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from shop_settings.permissions import register_can
 from decimal import Decimal, ROUND_HALF_UP
 from django.core.paginator import Paginator
 from django.http import JsonResponse
@@ -23,4 +24,6 @@ def item_picker(request):
             alternate=next((v for v in item.alternate_vendors.all() if str(v.vendor_id)==vendor),None)
             cost=alternate.order_cost if alternate else None
         rows.append(dict(id=item.pk,sku=item.sku,label=item.display_name,description=item.description,on_hand=quantity_text(item.on_hand) if item.on_hand is not None else None,available=quantity_text(free[item.pk]) if free[item.pk] is not None else None,price=plain(item.price),tax_rate=rate_text(item.tax_rate) if item.tax_rate is not None else None,vendor=item.vendor,cost=str(cost.quantize(Decimal('.01'),rounding=ROUND_HALF_UP)) if cost is not None else '',on_order=quantity_text(item.on_order),last_received=item.last_received.strftime('%m/%d/%Y') if item.last_received else ''))
+    if not register_can(request, 'see_costs'):
+        for row in rows: row.pop('cost', None)
     return JsonResponse(dict(results=rows,count=page.paginator.count,page=page.number,pages=page.paginator.num_pages))

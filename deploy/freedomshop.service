@@ -19,7 +19,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/freedomshop/media /var/lib/freedomshop/uploads
+# Backups, the restore maintenance flag and restore's side-by-side renames of media/uploads live here.
+ReadWritePaths=/var/lib/freedomshop
 
 [Install]
 WantedBy=multi-user.target

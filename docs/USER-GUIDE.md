@@ -4,7 +4,7 @@ FreedomShop · Point of Sale is a pre-release. This guide follows the implemente
 
 ## Sign in and cashiers
 
-Choose a login and enter its password on Sign In. An admin login enables Admin Mode, including reports and business and tax settings. For shared registers, sign in with the register login, then use **Cashier** to choose the person ringing the transaction and enter their four-digit PIN. A cashier PIN is separate from a login password.
+Choose a login and enter its password on Sign In. An admin login enables Admin Mode, including reports and business and tax settings. For shared registers, sign in with the register login, then use **Cashier** to choose the person ringing the transaction and enter their 4–6 digit PIN. A cashier PIN is separate from a login password.
 
 The active cashier appears on the transaction screen. Switch cashiers when another operator takes over, and use Sign Out when leaving the register. The Navigator links to sales, purchasing, inventory and available admin tools; Quick Find searches the selected record type.
 
@@ -70,7 +70,15 @@ Reports require Admin Mode. Choose a report, select its period or filters, then 
 
 **File → Tax Settings** controls whether new entries default to tax, the default location and rate, tax-year start, filing frequency, locations and categories. Turning tax off changes new defaults; existing item rates remain. Used locations and categories can be retired but cannot be renamed or deleted. Recorded historical payment tax is preserved when current rates change. **File → Printers** manages receipt, Letter and Zebra connections; test printing sends a real job.
 
-Setup creates the first admin, optional register login and PIN cashiers. A dedicated Users & PINs management screen is not built yet. For later user maintenance, an administrator uses the transactional `load_app_users` command described in [accounts/README.md](../accounts/README.md); omitted names are deactivated. Rerunning setup skips login creation when an admin already exists.
+## Users & Cashiers
+
+Sign in as an admin and open **File → Users & Cashiers** (also linked from Business Settings). Add Admin or Register logins, rename them, enable or disable them, change roles, reset passwords or delete logins. Set a password twice when adding a login; passwords must pass Django’s configured password checks. Several shared Register logins are allowed.
+
+The last active admin cannot be disabled, deleted or changed to Register. You cannot disable or delete your own login or remove your own Admin role. Every change to an admin login, including creating or promoting one, requires **your current admin password** in that form. Five failed confirmations block further confirmations for 15 minutes from the first failure; switching targets does not reset the limit. Resetting your own password requires signing in again.
+
+Cashiers are PIN identities, separate from logins. Add a name and enter a 4–6 digit PIN twice. Rename, reset PIN, disable or enable a cashier from the table. **Remove** permanently deletes an unused cashier; if their current or previous name appears on sales, payments or pickup history, it disables them instead. Earlier transactions and General Sales retain the cashier name recorded at the time. PINs are stored as hashes and cannot be displayed or recovered.
+
+The page shows the last 50 login and cashier changes, with the admin, time, action, target, address and non-secret before/after fields. Passwords and PINs are never included. All user maintenance is available here without a terminal. Setup still creates the first admin; **Run setup again** is unchanged and skips login creation when an admin already exists.
 
 ## Migrate from QuickBooks POS
 
@@ -89,3 +97,15 @@ This stage creates local files and command proposals. Posting requires a compati
 Notes & Requests is the shop's own notebook for requests, status, notes and attachments. Open it from the Navigator or Point of Sale menu. Its records remain in this installation and are not sent to the project.
 
 Use [GitHub Issues](https://github.com/CyberJody/FreedomShop/issues) for public project questions and bugs; [Discussions](https://github.com/CyberJody/FreedomShop/discussions) for open questions and ideas. **File → About FreedomShop** shows the installed version. Include the version, steps and generated sample records. Keep customer details, credentials and private attachments out of public reports. Follow [SECURITY.md](../SECURITY.md) for vulnerabilities.
+
+## Register & Sales Rules
+
+An admin can open **File → Register & Sales Rules**, or follow the link from Business Settings. Use the checkboxes to require customers, choose what register users may edit or see, require discount reasons, and require manager approval above a discount percentage. Admins always have every right; PIN cashiers inherit the register login's rights. See [Settings](SETTINGS.md) for the defaults table.
+
+New shops allow walk-in cash/card/gift-certificate sales and cash refunds. Account/store-credit transactions, payments on account, sales orders, layaways, holds and deposits always need a customer. With **Require a customer on every sale** checked, ordinary sales need one too. Walk-in receipts have no customer block.
+
+Inventory price/cost changes, stock adjustments, item/vendor/department editing and charge-account settings each have their own checkbox. With **See costs** off, cost values and profit figures are absent from register responses. Receiving requires stock and cost rights. A register login can still sell items and take returns normally.
+
+A price below regular counts as a discount. When a discount exceeds the enabled percentage, the editor opens **Manager Override**: an admin enters a username and password to approve that document. At 0%, any discount requires approval. If the register lacks the receipt-discount right, discounts and receipt price edits require approval even with the percentage rule off. Approval expires after two minutes and only works once for the approved contents; changing the document can require another approval. The register remains signed in and attempts are audited. Five failed attempts temporarily block approvals for the register session and admin name.
+
+**Require a discount reason** checks receipt/order discounts and new manual line discounts. Unchanged historical discounts and pickups retain their recorded reasons, including blanks. Rules are saved separately from setup: **Run setup again** is unaffected and does not reset them.

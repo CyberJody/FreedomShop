@@ -80,7 +80,8 @@ def apply_discounts(data, lines, kind, document, pickup_shares=None, keep_total=
     if amount and percent:
         raise WorkflowError('Enter the order discount as a percent or a dollar amount, not both.')
     reason, note = reason_fields(data, document)
-    if (percent or amount) and not reason and not _qb_discount_kept(document, percent, amount):
+    from shop_settings.config import register_rules
+    if register_rules().require_discount_reason and (percent or amount) and not reason and not _qb_discount_kept(document, percent, amount):
         raise WorkflowError(f'Choose a reason for the {what} discount.')
     for line in lines:
         line.receipt_discount = Decimal('0.00')

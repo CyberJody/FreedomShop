@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Read-only item-list batches and navigation state for the item list."""
+from shop_settings.permissions import register_can
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from django.http import JsonResponse
 
@@ -41,6 +42,8 @@ def item_rows(request, queryset, source):
         cells = [item.display_name, item.description, value(item.on_hand), value(getattr(item, 'held', None), '0'), f'${money(item.price):.2f}' if item.price is not None else 'Enter price', value(item.on_order, '0'),
                  item.last_received.strftime('%m/%d/%Y') if item.last_received else '—', item.size, str(item.primary_vendor or '—'), str(item.department or '—'),
                  f'${money(item.order_cost):.2f}' if item.order_cost is not None else 'Unverified', average, item.upc, item.alu, value(item.tax_rate), 'Active' if item.active else 'In Trash', item.sku]
+        if not register_can(request, 'see_costs'):
+            cells[10:12] = ['', '']
         href = f'/purchasing/items/{item.pk}/'
         rows.append(dict(id=item.pk, name=name, cells=cells, href=href,
                          orders=bool(item.on_order and item.on_order > 0)))  # the On Order cell opens the item's POs

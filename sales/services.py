@@ -224,12 +224,19 @@ def recalculate_order(order, after_refund=False):
     settle_order_tax(order, after_refund=after_refund)
 
 
+def approval_pricing(line):
+    """Values a current line approval describes, captured before saved lines are edited in place."""
+    return (line.item_id, line.original_price, line.price, line.quantity, line.discount_percent,
+            line.receipt_discount, line.tax_rate, line.amount)
+
+
 @transaction.atomic
-def save_document(data, kind, token, override=None, cashier=None, pickup=None):
+def save_document(data, kind, token, override=None, cashier=None, pickup=None, discount_authorizer=None, can_edit_items=True):
     """Save, hold, complete or cancel a receipt/order. `override` = dict(reason, by, address) only from a signed-in admin:
     needed (with a reason) to change a receipt after its store day, and logged as a ReceiptOverride.
     `pickup` = {order line pk: Line}, passed only by `fulfill_order` (never from a request): the order lines this
-    receipt picks up, so their items may be used even when they are in the Items Trash."""
+    receipt picks up, so their items may be used even when they are in the Items Trash.
+    Every interactive editor save passes discount_authorizer; trusted import/pickup callers preserve recorded data."""
     try: token = uuid.UUID(str(token))
     except (ValueError, TypeError): raise WorkflowError('Invalid document. Reload this page.')
     # Lock parent before child for order receipt edits and fulfillment.
@@ -272,6 +279,7 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
         order_pickup = data['order_pickup']
     was_held = bool(document and document.status == 'held')  # a re-saved held receipt may keep its hold time
     previous = list(document.lines.all()) if document else []
+    old_approval_pricing = {line.pk: approval_pricing(line) for line in previous}
     old_lines = {str(line.pk): line for line in previous}
     old_money = {str(line.pk): (line.amount, line.receipt_discount, line.tax_rate) for line in previous}  # before the rows below edit them in place
     old_text = {str(line.pk): (line.item_id, line.item_name, line.description) for line in previous}
@@ -283,6 +291,8 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
             # A damaged return never went back into stock, so it has nothing to undo.
             if line.item_id and line.item.item_type == 'inventory' and not line.damaged: old_qty[line.item_id] += line.quantity
     if action == 'cancel':
+        if kind == 'order' and not document.customer_id:
+            raise WorkflowError('A customer is required for orders and deposits.')
         if kind == 'order': qb_order_guard(document, 'refund')
         if kind == 'order' and document.unused_payments > 0:
             held = document.unused_payments
@@ -339,7 +349,14 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
         lock_ids=sorted({int(key)}|({old_customer_id} if old_customer_id else set()))
         list(Customer.objects.select_for_update().filter(pk__in=lock_ids).order_by('pk'))
         customer=Customer.objects.filter(pk=key,active=True).first()
-    if not customer: raise WorkflowError('A customer is required on every receipt and sales order.')
+    from shop_settings.config import register_rules
+    rules = register_rules()
+    if not customer and (rules.require_customer or kind == 'order' or pickup is not None or parent is not None or action == 'hold' or data.get('hold_for_pickup') is True):
+        raise WorkflowError('A customer is required on every receipt and sales order.' if rules.require_customer else 'A customer is required for orders and holds.')
+    if not customer and data.get('customer_id'):
+        raise WorkflowError('Choose an active customer.')
+    if not customer and any(row.get('account_payment') is True for row in rows):
+        raise WorkflowError('A customer is required for payments on account.')
     ids=set(old_qty)
     for row in rows:
         if row.get('item_id'):
@@ -366,7 +383,7 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
             originals[pk]=original
             if original.item_id: ids.add(original.item_id)
     items={i.pk:i for i in Item.objects.select_for_update().filter(pk__in=ids).order_by('pk')}
-    exempt=data.get('tax_exempt', customer.tax_exempt if not document else document.tax_exempt) is True
+    exempt=data.get('tax_exempt', (customer.tax_exempt if customer else False) if not document else document.tax_exempt) is True
     lines=[]; quantities=defaultdict(Decimal);seen=set();returned=defaultdict(Decimal);pickup_shares={}
     for position,row in enumerate(rows):
         if row.get('restocking_fee') is True: continue  # fee lines are recomputed below from the return lines
@@ -384,7 +401,7 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
             qty=decimal(row.get('quantity'),0,'return quantity',minimum=Decimal('-99999999'))
             if qty>=0: raise WorkflowError(f'Enter the return quantity for {original.item_name or original.description} as a negative number, e.g. -1.')
             returned[original.pk]-=qty
-            rate=original.tax_rate if original.tax_rate is not None else (customer.tax_rate if customer.tax_rate is not None else (item.tax_rate if item and item.tax_rate is not None else default_line_rate()))
+            rate=original.tax_rate if original.tax_rate is not None else (customer.tax_rate if customer and customer.tax_rate is not None else (item.tax_rate if item and item.tax_rate is not None else default_line_rate()))
             line=old or Line(returned_from_line=original)
             line.position=position;line.item=item;line.quantity=qty;line.price=original.price;line.tax_rate=rate;line.recorded_amount=None
             line.sku=original.sku;line.item_name=original.item_name;line.description=original.description or original.item_name or 'Returned item'
@@ -425,7 +442,7 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
         raw_price=str(row.get('price','')).strip()
         raw_regular=str(row.get('original_price','') if row.get('original_price') is not None else '').strip()
         client_regular=decimal(raw_regular,2,'regular price') if raw_regular and not on_account else None
-        catalog_regular=(old.original_price if old and old.original_price is not None else item.price) if item else None
+        catalog_regular=(old.original_price if old and old.item_id == item.pk and old.original_price is not None else item.price) if item else (old.original_price if old and old.item_id is None else None)
         source_line=(pickup or {}).get(row.get('pickup_line'))
         if source_line is not None:
             # A pickup rings the order line as it was sold: its exact price (4 decimals after a line %), its
@@ -458,7 +475,7 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
                 except WorkflowError:
                     if carried_price(raw_price,None,any_value=True) is not None: raise WorkflowError('Enter the price in whole cents (two decimal places). Use the % off field for a discount that leaves a fraction of a cent.')
                     raise
-        raw_rate=row.get('tax_rate', old.tax_rate if old else (customer.tax_rate if customer.tax_rate is not None else (item.tax_rate if item else default_line_rate())))
+        raw_rate=row.get('tax_rate', old.tax_rate if old else (customer.tax_rate if customer and customer.tax_rate is not None else (item.tax_rate if item else default_line_rate())))
         rate=decimal(raw_rate if raw_rate is not None else default_line_rate(),3,'tax rate',maximum=Decimal('100'))
         line.position=position;line.item=item;line.quantity=qty;line.price=price;line.tax_rate=rate;line.recorded_amount=None;line.damaged=False;line.return_reason='';line.return_note=''
         if source_line is not None and row.get('recorded_amount') is not None: line.recorded_amount=decimal(row['recorded_amount'],2,'line total')  # last part of a split order line (fulfill_order)
@@ -583,6 +600,8 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
                 if total==0 and not entry.get('method') and str(entry.get('amount') or '0').strip() in {'0','0.0','0.00','-0','-0.00'}:
                     continue
                 entry_method=payment_method(entry.get('method'))
+                if entry_method in ('account', 'deposit', 'store_credit') and not customer:
+                    raise WorkflowError('A customer is required for Account, store credit and deposits.')
                 if refund:
                     if entry_method not in REFUND_METHODS: raise WorkflowError('Give the refund as Cash, Credit card or Account.')
                     amount=decimal(entry.get('amount'),2,'refund amount',minimum=Decimal('-9999999999.99'),maximum=Decimal('0'))
@@ -628,6 +647,17 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
                 others=source_line.deliveries.filter(document__status='completed').exclude(document=document)
                 if line.quantity+sum(others.values_list('quantity',flat=True),Decimal('0'))>source_line.quantity:
                     raise WorkflowError('Pickup quantity exceeds the customer order. Edit the order first.')
+    approval = discount_authorizer(document, lines, receipt_discount, discount_percent, total) if discount_authorizer else None
+    pricing_changed = len(lines) != len(old_approval_pricing)
+    for line in lines:
+        if old_approval_pricing.get(line.pk) != approval_pricing(line):
+            line.approved_by = None
+            pricing_changed = True
+    if document and (pricing_changed or
+            (document.discount, document.discount_percent, document.tax_exempt, document.tax, document.total) !=
+            (receipt_discount, discount_percent, exempt, tax, total)):
+        # Historical grants and attempt audits remain intact; current attribution follows current pricing.
+        document.approved_by = None
     new_qty=quantities if action=='complete' else {}
     for pk in set(old_qty)|set(new_qty):
         item=items[pk]
@@ -638,13 +668,17 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
             item.on_hand+=delta;item.version+=1;item.save(update_fields=['on_hand','version'])
     if not document: document=Document(token=token,kind=kind)
     else: document.version+=1
-    document.customer=customer;document.customer_name=customer.display_name
+    document.customer=customer;document.customer_name=customer.display_name if customer else ''
     document.notes=short(data.get('notes',''),5000,'Instructions')
-    document.shipping_address=short(data.get('shipping_address',customer.default_shipping_address if not document.pk else document.shipping_address),2000,'Shipping address')
+    document.shipping_address=short(data.get('shipping_address',(customer.default_shipping_address if customer else '') if not document.pk else document.shipping_address),2000,'Shipping address')
     document.customer_po=short(data.get('customer_po',''),100,'Customer PO number')
     try: document.due_date=date.fromisoformat(data['due_date']) if data.get('due_date') else None
     except (ValueError,TypeError): raise WorkflowError('Enter a valid due date.')
     document.tax_exempt=exempt;document.tax_location=tax_location_for(exempt);document.subtotal=subtotal;document.tax=tax;document.total=total
+    if approval:
+        document.approved_by = approval
+        for line in lines:
+            if line.price != line.original_price or line.discount_percent or line.receipt_discount: line.approved_by = approval
     document.discount=receipt_discount;document.discount_percent=discount_percent;document.discount_reason=discount_reason;document.discount_note=discount_note
     document.payment_method=method;document.tendered=tendered;document.payment_breakdown=breakdown
     # Identity comes only from the authenticated session, never document JSON.
@@ -689,11 +723,11 @@ def save_document(data, kind, token, override=None, cashier=None, pickup=None):
         # (matching QB): a special-order item that belongs to this order follows the line's new name/description
         # (and so do its not-yet-received PO lines); `notes` tell staff what else changed.
         from .special_items import sync_special_items
-        document.notes_for_screen=sync_special_items(document, lines, old_text)
+        document.notes_for_screen=sync_special_items(document, lines, old_text, can_edit_items=can_edit_items)
     StockMovement.objects.filter(document=document).delete()
     if action=='complete':
         for pk,qty in quantities.items(): StockMovement.objects.create(document=document,item_id=pk,quantity=-qty)
-    accounts.refresh(old_customer_id,customer.pk)
+    accounts.refresh(old_customer_id,customer.pk if customer else None)
     if parent: recalculate_order(parent)
     if kind=='order': recalculate_order(document);document.refresh_from_db()
     log_override(document, action, override, before)

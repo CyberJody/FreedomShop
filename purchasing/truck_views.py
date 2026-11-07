@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Truck Receiving screens: the truck list, the scan screen and its JSON endpoints."""
+from shop_settings.permissions import register_can, refused
 import json
 from functools import wraps
 
@@ -23,6 +24,8 @@ def allowed(user):
 def truck_access(view):
     @wraps(view)
     def wrapped(request, *args, **kwargs):
+        for right in ('see_costs', 'edit_costs', 'adjust_stock'):
+            if not register_can(request, right): return refused(right)
         if not allowed(getattr(request, 'user', None)):
             if request.method == 'POST' or request.headers.get('Accept') == 'application/json':
                 return JsonResponse({'error': 'Sign in to the store to use Truck Receiving.'}, status=403)

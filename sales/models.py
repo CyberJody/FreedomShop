@@ -387,6 +387,7 @@ class Document(OrderPaymentTaxLock):
     # subtotal before tax. Blank / zero on native documents.
     tax_location = models.CharField(max_length=100, blank=True, editable=False)
     discount = MoneyField(max_digits=12, decimal_places=2, default=0, editable=False)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     discount_reason = models.CharField(max_length=100, blank=True)
     discount_note = models.CharField(max_length=200, blank=True)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -683,6 +684,7 @@ class Line(models.Model):
     # QB POS regular price at the time of sale and the discount reason QuickBooks recorded (e.g. "Sale", "Defect").
     # Null/blank on native lines. A line is discounted when price < original_price.
     original_price = MoneyField(max_digits=16, decimal_places=2, null=True, blank=True, editable=False)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     discount_reason = models.CharField(max_length=100, blank=True, editable=False)
     # % off the regular price on this line (QB DiscountPercent): price = original_price x (100 - %) / 100, exact to
     # 4 decimals. 0 when the price was typed or the line is not discounted.
@@ -1034,3 +1036,14 @@ class ItemTrash(models.Model):
 
     def __str__(self):
         return f'{self.item_name or self.sku} · trashed {self.trashed_at:%m/%d/%Y}'
+
+
+class DiscountApproval(models.Model):
+    """Hashed, one-use grant. Consumption shares the document's transaction and row lock."""
+    token_hash = models.CharField(max_length=64, unique=True)
+    session_hash = models.CharField(max_length=64)
+    document_token = models.UUIDField()
+    fingerprint = models.CharField(max_length=64)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True)

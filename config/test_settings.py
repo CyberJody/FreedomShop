@@ -8,6 +8,7 @@ INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.sessions', 'accounts', 
 DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
 TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'DIRS': ['templates'], 'APP_DIRS': True, 'OPTIONS': {'context_processors': ['django.template.context_processors.request', 'accounts.admin_mode.context', 'accounts.cashiers.context', 'accounts.server_status.health', 'shop_settings.context.context'], 'builtins': ['sales.templatetags.quantity_tags']}}]
 MIDDLEWARE = []
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 USE_TZ = True
 
@@ -40,3 +41,19 @@ SHOP_SETTINGS_SEED = Path(__file__).resolve().parent.parent / 'shop_settings' / 
 
 # Business Settings logo uploads go to a throwaway temp folder.
 MEDIA_ROOT = tempfile.mkdtemp(prefix='fs-test-media-')
+
+# Legacy view tests have no authentication middleware. Authenticated identities still use saved rights.
+REGISTER_RULES_TEST_ANONYMOUS = True
+# Existing tests exercise the historical policy; new policy tests save their own row explicitly.
+REGISTER_RULES_TEST_DEFAULTS = {
+    'require_customer': True, 'require_discount_reason': True,
+    'edit_prices': True, 'edit_costs': True, 'see_costs': True, 'adjust_stock': True,
+    'edit_items': True, 'edit_vendors': True, 'edit_departments': True,
+    'manage_charge_accounts': True, 'receipt_discounts': True,
+}
+CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+          'admin_reauthentication': {'BACKEND': 'accounts.reauth_cache.ReauthenticationCache',
+                                     'LOCATION': 'accounts_adminreauthenticationcache'},
+          'register_overrides': {'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+                                 'LOCATION': 'shop_settings_registeroverridecache', 'TIMEOUT': 900,
+                                 'OPTIONS': {'MAX_ENTRIES': 2147483647, 'CULL_FREQUENCY': 3}}}

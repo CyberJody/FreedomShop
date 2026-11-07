@@ -20,7 +20,7 @@ def _changed_on_order(line, was):
     return (was[1], was[2]) != (line.item_name, line.description)
 
 
-def sync_special_items(order, lines, old_text):
+def sync_special_items(order, lines, old_text, can_edit_items=True):
     """Called by save_document inside its transaction after an order's lines are saved. `old_text` = {line pk (str):
     (item_id, item_name, description)} as the lines were before this save. Returns notes for the screen."""
     from purchasing.item_views import same_name_items
@@ -48,6 +48,9 @@ def sync_special_items(order, lines, old_text):
             continue   # a stock item (or a SOLD piece shared by several customers): the edit stays on the order line
         if Line.objects.filter(item_id=item.pk, document__kind='order').exclude(document=order).exclude(document__status='cancelled').exists():
             continue   # on another order too: not this order's own piece
+        if not can_edit_items:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied('This register login cannot edit items.')
         item = Item.objects.select_for_update().get(pk=item.pk)
         old_name, old_description = item.display_name, item.description
         fields = []

@@ -1,0 +1,2 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% if notice %}<p class="{% if notice.error %}error{% else %}success{% endif %}" role="{% if notice.error %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endif %}

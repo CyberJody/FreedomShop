@@ -243,8 +243,10 @@ def render_receipt(doc, reprint=False):
     r.space(8)
     print_store_lines(r, heading)
     r.space(14)
-    r.text('BILL TO:', 22, bold=True)
-    r.wrap(bill_to(doc), 22)
+    customer_block = bill_to(doc)
+    if customer_block:
+        r.text('BILL TO:', 22, bold=True)
+        r.wrap(customer_block, 22)
     if doc.customer_po:
         r.text(f'Customer PO: {doc.customer_po}', 20)
     r.space(10)

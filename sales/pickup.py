@@ -59,6 +59,8 @@ def ineligible_reason(doc, lines=None):
     """Why this receipt can't be held for pickup, or '' when it can: a completed sale of goods (not a return or
     exchange, a sales-order pickup, a deposit/payout receipt, or a receipt that only takes a payment on account or sells
     a gift certificate)."""
+    if not doc.customer_id:
+        return 'A customer is required to hold items for pickup.'
     if doc.kind != 'sale':
         return 'Hold for Pickup is for sales receipts.'
     if doc.receipt_type not in (None, 0):

@@ -11,6 +11,13 @@ from .config import UNREADABLE, clear_cache, ensure_configured
 def _configure(sender, using='default', **kwargs):
     try:
         ensure_configured(using=using)
+        from .models import RegisterRules
+        from django.conf import settings
+        defaults = getattr(settings, 'REGISTER_RULES_TEST_DEFAULTS', {})
+        if defaults:
+            RegisterRules.objects.using(using).update_or_create(pk=1, defaults=defaults)
+        else:
+            RegisterRules.objects.using(using).get_or_create(pk=1)
     except UNREADABLE:   # the settings tables aren't there yet (a partial migrate)
         pass
 

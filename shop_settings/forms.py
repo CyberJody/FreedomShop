@@ -134,3 +134,17 @@ class BusinessForm(forms.ModelForm):
         if url and not url.startswith(('https://', 'http://')):
             raise forms.ValidationError('Enter a web address starting with https://, or leave it blank.')
         return url
+
+
+class RegisterRulesForm(forms.ModelForm):
+    version = forms.IntegerField(widget=forms.HiddenInput)
+
+    class Meta:
+        from .models import RegisterRules
+        model = RegisterRules
+        fields = ['require_customer', 'edit_prices', 'edit_costs', 'see_costs', 'adjust_stock', 'edit_items',
+                  'edit_vendors', 'edit_departments', 'manage_charge_accounts', 'receipt_discounts',
+                  'discount_override_enabled', 'discount_override_percent', 'require_discount_reason']
+        labels = {'discount_override_enabled': 'Discounts above the percent below need a manager override',
+                  'discount_override_percent': 'Discount threshold (%)', 'receipt_discounts': 'Give discounts or edit the price on a receipt',
+                  'manage_charge_accounts': 'Turn on charge accounts and set limits', 'adjust_stock': 'Adjust stock'}

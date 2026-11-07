@@ -11,6 +11,9 @@ DATA_DIR = Path("@@DATA_DIR@@")
 MEDIA_ROOT = DATA_DIR / "media"
 MEDIA_URL = "/media/"
 TRACKER_UPLOAD_DIR = DATA_DIR / "uploads" / "fixes"
+BACKUP_DIR = DATA_DIR / "backups"
+BACKUP_SETTINGS_FILES = [Path(__file__).resolve(), SECRET_KEY_FILE]
+BACKUP_SCHEDULE_ENABLED_DEFAULT = True  # freedomshop-backup.timer runs the Backups page schedule.
 DATABASES = {"default": {
     "ENGINE": "django.db.backends.postgresql",
     "NAME": "freedomshop",

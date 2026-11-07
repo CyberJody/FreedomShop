@@ -1,0 +1,11 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% extends "settings/base.html" %}
+{% block content %}<div class="settings-wrap">
+{% if saved %}<p class="success" role="status">Register rules saved.</p>{% endif %}
+<p>Admins always have every right. PIN cashiers use the rights of the register login.</p>
+<form method="post">{% csrf_token %}{{ form.non_field_errors }}{{ form.version }}
+<section class="settings-panel"><h2>Customers</h2><p>{{ form.require_customer }} {{ form.require_customer.label_tag }}</p><p>Account, store credit, orders, holds and deposits always need a customer.</p></section>
+<section class="settings-panel"><h2>Register users can:</h2>
+{% for field in form.visible_fields %}{% if field.name != 'require_customer' and field.name != 'require_discount_reason' and field.name != 'discount_override_enabled' and field.name != 'discount_override_percent' %}<p>{{ field }} {{ field.label_tag }}{{ field.errors }}</p>{% endif %}{% endfor %}
+</section><section class="settings-panel"><h2>Discounts</h2><p>{{ form.discount_override_enabled }} <label for="id_discount_override_enabled">Discounts above {{ form.discount_override_percent }}% need a manager override</label>{{ form.discount_override_percent.errors }}</p><p>0 means any discount when enabled. A price below the regular price counts as a discount. Without the discount right, price edits and discounts always need approval.</p><p>{{ form.require_discount_reason }} {{ form.require_discount_reason.label_tag }}</p></section>
+<p>Run setup again is unaffected; these saved rules stay in place.</p><button class="button primary">Save rules</button></form></div>{% endblock %}

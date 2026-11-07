@@ -1,6 +1,6 @@
 {# SPDX-License-Identifier: AGPL-3.0-or-later #}
 {% extends "sales/base.html" %}
-{% block task_shortcuts %}<a class="shortcut" href="/settings/business/">Business Settings</a><a class="shortcut" href="/settings/tax/">Tax Settings</a><a class="shortcut" href="/printers/">Printers</a><a class="shortcut" href="/server-status/">Server Status</a>{% if admin_mode %}<a class="shortcut" href="/settings/migrate-quickbooks/">Migrate from QuickBooks POS</a><a class="shortcut" href="/setup/">Run setup again</a>{% endif %}{% endblock %}
+{% block task_shortcuts %}<a class="shortcut" href="/settings/business/">Business Settings</a><a class="shortcut" href="/settings/tax/">Tax Settings</a><a class="shortcut" href="/settings/register/">Register &amp; Sales Rules</a><a class="shortcut" href="/settings/backups/">Backups</a><a class="shortcut" href="/printers/">Printers</a><a class="shortcut" href="/server-status/">Server Status</a>{% if admin_mode %}<a class="shortcut" href="/settings/migrate-quickbooks/">Migrate from QuickBooks POS</a><a class="shortcut" href="/setup/">Run setup again</a>{% endif %}{% endblock %}
 {% block extra_style %}<style>
 .settings-wrap{overflow:auto;padding:12px 14px;flex:1}.settings-panel{border:1px solid #c9d1da;border-radius:4px;margin:0 0 16px;padding:12px 14px;background:#fff}
 .settings-panel h2{font-size:16px;margin:0 0 10px}.settings-grid{max-width:900px;display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px 16px}

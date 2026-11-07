@@ -1,5 +1,6 @@
 {# SPDX-License-Identifier: AGPL-3.0-or-later #}
-{% extends "settings/base.html" %}{% block content %}<div class="settings-wrap">
+{% extends "settings/base.html" %}{% block content %}<div class="settings-wrap"><p><a href="/settings/register/">Register &amp; Sales Rules</a></p>
+<p><a href="{% url 'users-settings' %}">Users &amp; Cashiers</a> — manage logins and cashier PINs.</p>
 {% if saved %}<p class="success" role="status">Business settings saved.</p>{% endif %}
 <form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.non_field_errors }}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
 <section class="settings-panel" aria-labelledby="biz-name"><h2 id="biz-name">Business</h2><div class="settings-grid">

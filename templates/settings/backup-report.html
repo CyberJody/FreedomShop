@@ -1,0 +1,15 @@
+{% extends "settings/base.html" %}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% block content %}<div class="settings-wrap"><section class="settings-panel"><h2>Restore report — {{ backup.stamp }}</h2>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p>Status: {{ report.status|default:"No restore copy" }}. Stopped at: {{ report.step|default:"Not started" }}.</p>{% if report.error %}<p class="error">{{ report.error }}</p>{% endif %}
+{% if report.table_count %}<p>{{ report.table_count }} tables; {{ report.business_rows }} business row. Migrations current: {{ report.migrations_current|yesno:"Yes,No" }}.</p>{% endif %}
+{% if report.safety_stamp %}<p>Fresh safety backup: {{ report.safety_stamp }}.</p>{% endif %}
+{% if report.rolled_back %}<p>Switch-over was rolled back. The live shop is unchanged.</p>{% endif %}
+{% if report.status == 'ready' %}<p>The copy passed verification. Switch-over pauses the shop, takes a fresh safety backup, and replaces the live database, attachments and settings. All signed-in sessions will follow the restored database.</p>
+<form method="post" action="{% url 'backup-switch' backup.stamp %}">{% csrf_token %}<label for="confirmation">Type RESTORE to confirm</label> <input id="confirmation" name="confirmation" required autocomplete="off" pattern="RESTORE"><button class="button">Switch over</button></form>{% endif %}
+{% if report.status == 'complete' %}<p class="success">Switch-over completed. Restart all app workers to load the restored settings.</p>{% if report.settings_kept %}<p>These settings files differ from the backup but the app cannot write their folder, so they were kept as they are on this server: {{ report.settings_kept|join:", " }}. The backup's copies are in the restore copy; an operator can put them in place.</p>{% endif %}{% endif %}
+{% if report.status and report.status != 'recovery_required' %}<form method="post" action="{% url 'backup-discard' backup.stamp %}">{% csrf_token %}<button class="button">Discard restore copy</button> <span class="helptext">Removes the restore copy so this backup can be restored into a copy again. The live shop is not touched.</span></form>{% endif %}
+{% if report.status == 'recovery_required' %}<p class="error">Maintenance remains active. Ask the operator to review the restore journal before restarting the shop.</p>{% endif %}
+<p><a href="{% url 'backups' %}">Back to Backups</a></p></section>
+{% if logs %}<section class="settings-panel"><h2>Restore history</h2><ul>{% for log in logs %}<li>{{ log.created_at }}: {{ log.action }}, {{ log.status }}, {{ log.step }}{% if log.error %}: {{ log.error }}{% endif %}</li>{% endfor %}</ul></section>{% endif %}</div>{% endblock %}

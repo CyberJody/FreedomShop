@@ -67,6 +67,8 @@ def health(request):
     return JsonResponse({"status": "ok", "database": "ok"})
 
 
+from sales.manager_override import manager_override
+
 from sales import gift_views
 
 urlpatterns = [
@@ -195,6 +197,7 @@ urlpatterns += [path('purchasing/truck/', truck_views.truck_list, name='truck-li
                 path('purchasing/truck/<uuid:token>/receive/', truck_views.truck_receive),
                 path('purchasing/truck/<uuid:token>/cancel/', truck_views.truck_cancel)]
 
+urlpatterns += [path('pos/<str:kind>/<uuid:token>/manager-override/', manager_override)]
 urlpatterns += [path('', include('shop_settings.urls'))]  # admin-only settings screens (Business, Tax)
 urlpatterns += [path('settings/migrate-quickbooks/', include('sales.qbpos_urls'))]
 

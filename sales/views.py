@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, time as dtime, timedelta
 
 from django.core.paginator import Paginator
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseForbidden
 from django.db import IntegrityError
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
@@ -13,6 +15,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_safe
+from shop_settings.permissions import sales_mutation_required
 
 from customers.models import Customer, tax_location_for
 from .models import DiscountReason, Document, Item, Line, PAYMENT_METHODS, CARD_TYPES, RESTOCKING_FEE_PERCENT, RETURN_REASONS, plain, exact_text, quantity_text, rate_text, money as round_money, store_today
@@ -21,6 +24,7 @@ from config.list_scroll import wants_rows, scroll_rows, scroll_config, link, fmt
 from . import accounts
 from accounts import admin_mode
 from .services import save_document, WorkflowError, save_order_payment, fulfill_order, returnable, return_status, default_line_rate
+from .manager_override import ApprovalRequired, authorizer
 from . import holds
 from .printing import PrintError, receipt_printers, print_receipt as send_receipt
 
@@ -160,6 +164,7 @@ def screen_tenders(doc):
 
 @never_cache
 @require_http_methods(['GET', 'HEAD', 'POST'])
+@sales_mutation_required
 def editor(request, kind, token=None):
     if request.method == 'POST':
         try:
@@ -170,6 +175,9 @@ def editor(request, kind, token=None):
                 raise WorkflowError('Invalid document.')
             if token is not None and str(token) != str(data.get('token')):
                 raise WorkflowError('Document does not match this page.')
+            from shop_settings.permissions import register_can, refused
+            if data.get('override_limit') is True and not register_can(request, 'manage_charge_accounts'):
+                return refused('manage_charge_accounts')
             override = None
             if data.get('override') is True:
                 # Admin Override of a locked (past-day) receipt: signed-in admins only, always with a typed reason;
@@ -181,11 +189,17 @@ def editor(request, kind, token=None):
             from accounts.cashiers import active
             cashier = active(request)
             doc = save_document(data, kind, token or data.get('token'), override=override,
-                                cashier=cashier.name if cashier else None)
+                                cashier=cashier.name if cashier else None,
+                                discount_authorizer=authorizer(request, data, kind, token or data.get('token')),
+                                can_edit_items=register_can(request, 'edit_items'))
             if kind == 'order' and data.get('action') == 'cancel' and doc.status == 'cancelled':
                 return JsonResponse({'url': f'/pos/order/{doc.token}/?saved=order-cancelled', 'number': doc.number})
             return JsonResponse({'url': f'/pos/{kind}/{doc.token}/', 'number': doc.number,
                                  'message': ' '.join(getattr(doc, 'notes_for_screen', None) or [])})  # notes
+        except PermissionDenied as exc:
+            return HttpResponseForbidden(str(exc), content_type='text/plain')
+        except ApprovalRequired:
+            return JsonResponse({'error': 'Manager Override required for this discount or price edit.', 'override_required': True}, status=403)
         except (WorkflowError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             return JsonResponse({'error': str(exc)}, status=400)
         except IntegrityError:
@@ -268,9 +282,11 @@ def pickup_context(doc):
 
 @never_cache
 @require_http_methods(['POST'])
+@sales_mutation_required
 def pickup_action(request, token):
     """Hold for Pickup / change the est. pickup date / Mark Picked Up on a finished receipt. No money, tax or stock
-    changes, so any day and any login (no receipt lock, no Admin Override). Mark Picked Up stamps the active cashier."""
+    changes, so any day under an active Admin/register login (no receipt lock, no Admin Override).
+    Mark Picked Up stamps the active cashier."""
     from urllib.parse import urlencode
     from accounts.cashiers import active
     from . import pickup
@@ -515,10 +531,16 @@ def sales_row(doc, section):
 
 @never_cache
 @require_http_methods(['POST'])
+@sales_mutation_required
 def order_action(request, token, action):
+    from shop_settings.permissions import register_can, refused
+    if request.POST.get('override_limit') == '1' and not register_can(request, 'manage_charge_accounts'):
+        return refused('manage_charge_accounts')
     from urllib.parse import urlencode
     order=get_object_or_404(Document,token=token,kind='order')
     try:
+        if not order.customer_id:
+            raise WorkflowError('A customer is required for orders and deposits.')
         if action=='payment':
             from accounts.cashiers import active
             cashier=active(request)
@@ -570,6 +592,7 @@ def held_details(request, token):
 
 @require_http_methods(['POST'])
 @never_cache
+@sales_mutation_required
 def held_extend(request, token):
     """extend (or shorten) a held receipt's hold from the Held Receipts list. A new hold time clears an Expired mark
     and reserves the items again; the lines are untouched."""
@@ -600,6 +623,7 @@ def held_extend(request, token):
 
 @require_http_methods(['POST'])
 @never_cache
+@sales_mutation_required
 def held_delete(request, token):
     """QB POS Held Receipts > Delete: a held receipt never moved stock or money, so it is removed outright. Deleting
     it also ends any hold it had on its items (the reservation lives on the held row, not in stock movements)."""
