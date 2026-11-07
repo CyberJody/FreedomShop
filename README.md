@@ -2,6 +2,12 @@
 
 FreedomShop is a browser-based point of sale and inventory application for independent shops. Run it on your own server to handle the counter, customer accounts, purchasing, stock, printing and daily reports. Business details and sales tax rules belong to your installation. [FreedomBooks](https://freedombooks.app) is its accounting sibling.
 
+## Recommended deployment
+
+**Run FreedomShop on a trusted local network. For remote access, use a private VPN such as Tailscale, restricted to authorized users and devices. Direct public-internet exposure is not recommended.**
+
+The current testing does not establish readiness for public-internet hosting. A hosted server should follow the same private-access model; an internet-facing hosting service would need a separate security and operations assessment. See [INSTALL.md](INSTALL.md#network-access) for network and HTTPS guidance.
+
 ## Who it is for
 
 For shops moving from QuickBooks POS and teams that need sales orders, deposits and piece-by-piece receiving alongside everyday sales. QuickBooks POS is named only to identify the migration source; FreedomShop is an independent project, with no affiliation or endorsement implied.

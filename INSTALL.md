@@ -2,6 +2,14 @@
 
 FreedomShop is a pre-release. Native Debian 13 installation is the first path; Ubuntu 24.04 is also a packaging target. A `.deb` package and Compose are alternatives. Until the first release is published, run the installer from a clone of the repository instead of a release archive.
 
+## Network access
+
+**Recommended usage is a trusted shop LAN, with remote access through a private VPN such as Tailscale. Direct public-internet exposure is not recommended.** This also applies to a server hosted outside the shop: keep access private and limited to authorized users and devices.
+
+Before installing on a machine with a public network interface, configure its firewall to allow FreedomShop web access only from the intended LAN or VPN. Do not make the application reachable through public router port forwarding, a public reverse proxy or a public tunnel. With Tailscale, use private tailnet access or [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve), with access rules for the intended staff and devices. [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel) makes a service publicly accessible and does not meet this recommendation.
+
+Use a stable private address or DNS name for the server. A name such as `shop.example.com` in this guide can resolve only on your LAN or VPN; using a domain name does not require public access. Restrict guest Wi-Fi and other untrusted networks from reaching the service. A private network does not replace application logins, permissions, updates, backups or [HTTPS](#https).
+
 ## A server, with browsers at the registers
 
 FreedomShop is a server application. Install it once, on a Linux server in the shop or one you control; there are no Windows or Mac desktop builds. Each register, office computer or tablet opens the shop's address (for example `https://shop.example.com/`) in a current web browser, so Windows, Mac, Linux and ChromeOS registers all work without installing anything.
@@ -71,7 +79,9 @@ docker compose up -d --build
 docker compose ps
 ```
 
-The default app address is `http://127.0.0.1:8001` on the server. To reach it from registers, configure the bind address and a trusted reverse proxy. Open that web address and complete `/setup/`, or run `docker compose run --rm app manage.py setup`. The entrypoint runs migrations before starting the app. Do not expose PostgreSQL to the register network. Keep persistent database and upload volumes when replacing containers; `docker compose down -v` removes volumes and is not an upgrade step.
+The default app address is `http://127.0.0.1:8001` on the server. To reach it from registers, configure a trusted reverse proxy reachable only on the intended LAN or VPN. `FREEDOMSHOP_BIND_ADDRESS` controls both the published app port and the optional Compose nginx port. Keep it on loopback when using a proxy on the host; otherwise bind only to the required private interface and restrict the app port to the proxy. Binding to `0.0.0.0` listens on every IPv4 interface, including any public interface, so a firewall must still restrict access.
+
+Open the private web address and complete `/setup/`, or run `docker compose run --rm app manage.py setup`. The entrypoint runs migrations before starting the app. Keep PostgreSQL private to the server or container network. Keep persistent database and upload volumes when replacing containers; `docker compose down -v` removes volumes and is not an upgrade step.
 
 The app container must be able to reach supported network printers. A printer at `127.0.0.1` inside a container means that container. Use a reachable printer address. Apply the HTTPS options below at the reverse proxy.
 
@@ -104,6 +114,8 @@ Scanner notes: no driver needed; it types into the focused field.
 The tested scanner supports the app's QR serial labels. Use a 2D scanner for QR codes, including on Scanner Test. The scan boxes on Truck Receiving and Scanner Test take focus automatically.
 
 ## HTTPS
+
+Use HTTPS within the private deployment described above. A certificate and HTTPS do not establish readiness for public-internet hosting or change the private-network recommendation.
 
 Use nginx with either a certificate from a public certificate authority, your organization's trusted local CA, or a TLS reverse proxy in front of the installation. Public certificates can use DNS validation when the server is reachable only on a private network. Install the complete certificate chain and arrange renewal and nginx reloads.
 
