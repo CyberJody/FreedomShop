@@ -44,6 +44,8 @@ Create a Purchase Order, choose its vendor, and add items, quantities and costs.
 
 Use **Receive Items** to create a receiving voucher, including arrivals against a PO. Check the quantities and costs, then receive the voucher to update stock. Held Vouchers stores unfinished work; Receiving History shows posted vouchers. To correct a posted receiving mistake, use **Reverse Voucher**, then receive the corrected quantities again. Imported and linked documents restrict edits to preserve their history.
 
+For products with existing supplier barcodes, save the code in the item's **UPC** or **ALU** field. Item search also matches alternate-vendor UPC/ALU codes. Scan into a receiving voucher's item search, select the correct match, enter the quantity and check the cost. A scan only looks up an existing catalog item; it does not create an item or add stock by itself. When receiving against a PO, check the linked PO line and quantity before posting. See [Custom labels and receiving](CUSTOM-LABELS.md) for both workflows and QR website setup.
+
 ## Truck receiving by serial
 
 Print the PO's piece labels first. Open **Truck Receiving** and scan a piece serial or type its code and press Enter. The first valid scan starts a truck session. Check the status panel after each scan; it distinguishes accepted pieces, repeats and errors. The truck table groups pieces by vendor and PO and shows ordered, already received and scanned quantities.
@@ -55,6 +57,8 @@ Remove an incorrect scan before choosing **Receive Items**. Receiving creates on
 Use Tag Generator for an item tag or a saved furniture set tag. Item tags use the Item List text, show a preview and allow text changes before sending a 3 × 4 inch tag to a Zebra printer. Print Tags must be enabled for the item. An item's tag page also offers a Letter tag; its text comes from the item, independently of Zebra preview edits.
 
 Furniture set tags collect several items into a Letter sign and can be saved, reopened or downloaded as PDF. PO piece labels identify individual pieces for truck receiving. Choose the intended printer and copy count before printing. Business Settings supplies the shop name, logo and label settings; printer connections are configured separately.
+
+The catalog item number identifies a product; a PO piece serial identifies one physical piece ordered. The item's **Use serial numbers** checkbox is a stored reference setting for manufacturer serial tracking, which is not implemented; it does not enable or disable PO piece labels. The QR can open your public marketing website while retaining the serial for Truck Receiving. [Set up the label website address](CUSTOM-LABELS.md#your-public-qr-website-address), including an optional subdomain and Cloudflare instructions. Keep the public website separate from the private POS.
 
 ## Reports
 

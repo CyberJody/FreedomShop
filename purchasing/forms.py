@@ -122,7 +122,7 @@ class ItemForm(forms.ModelForm):
         current = self.instance.tax_category
         self.fields['tax_category'].widget = forms.Select(choices=names + ([(current, current)] if current and current not in dict(names) else []))
         self.fields['unit_of_measure'].help_text = 'Base unit for all quantities; pack conversions are not available.'
-        self.fields['use_serial_numbers'].help_text = 'Saved for reference; the app does not track serial numbers.'
+        self.fields['use_serial_numbers'].help_text = 'Manufacturer serial tracking is not available; PO piece labels are separate.'
         self.fields['earn_commission'].help_text = 'Eligibility setting only; commission calculation is not available.'
         self.fields['earn_rewards'].help_text = 'Eligibility setting only; reward calculation is not available.'
         self.fields['unorderable'].help_text = 'Blocks purchase orders and receiving until cleared.'
@@ -228,7 +228,7 @@ class HeaderForm(forms.Form):
 class LineForm(forms.Form):
     line_id = forms.IntegerField(required=False, widget=forms.HiddenInput)
     item = forms.ModelChoiceField(queryset=Item.objects.all(),widget=forms.HiddenInput)
-    item_name = forms.CharField(required=False,widget=forms.TextInput(attrs={'class':'item-search','placeholder':'Find item by name or SKU','autocomplete':'off','aria-label':'Find inventory item'}))
+    item_name = forms.CharField(required=False,widget=forms.TextInput(attrs={'class':'item-search','placeholder':'Scan UPC or ALU, or find item by name or number','autocomplete':'off','aria-label':'Scan barcode or find inventory item'}))
     item_description = forms.CharField(required=False,widget=forms.Textarea(attrs={'rows':2,'readonly':True,'aria-label':'Item description','class':'purchase-description'}))
     quantity = WholeNumberField(min_value=0,initial=1,label='Qty',widget=forms.NumberInput(attrs={'class':'quantity','aria-label':'Quantity'}),error_messages={'invalid':'Quantity must be a whole number.'})  # 0 = skip the line (whole numbers only)
     cost = forms.DecimalField(max_digits=12,decimal_places=2,min_value=0,label='Unit Cost',widget=forms.NumberInput(attrs={'step':'0.01','class':'cost','aria-label':'Unit cost'}))

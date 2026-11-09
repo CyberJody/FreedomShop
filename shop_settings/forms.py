@@ -101,6 +101,9 @@ class BusinessForm(forms.ModelForm):
                    (('receipt_header_lines', 4), ('return_policy', 5), ('order_return_policy', 5), ('order_address_lines', 3))}
         widgets['logo'] = forms.FileInput(attrs={'accept': 'image/png,image/jpeg'})
         widgets['closing_time'] = forms.TimeInput(format='%H:%M', attrs={'type': 'time'})
+        labels = {'label_url': 'QR label website address'}
+        help_texts = {'label_url': 'Public website for PO piece-label QR codes, e.g. https://labels.example.com/?wc={code}. '
+                                  'Keep wc={code} in the query string for receiving scans. Blank uses the server setting.'}
 
     def clean_exchange_outbox(self):
         from pathlib import Path
