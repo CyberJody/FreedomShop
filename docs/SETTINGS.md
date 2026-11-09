@@ -1,5 +1,21 @@
 # Settings
 
+## Business website and QR labels
+
+Admins open **File → Business Settings** (`/settings/business/`). These are separate saved settings:
+
+| Setting | Purpose |
+| --- | --- |
+| Website | General website address in the shop's business details. Changing it does not change the QR destination. |
+| QR label website address | Public address encoded in PO piece-label QR codes, for example `https://labels.example.com/?wc={code}`. Earlier builds label this **Item label web address**. Keep `wc={code}` in the query string so Truck Receiving can extract the serial. |
+| Serial prefix | Shop-selected prefix for newly generated piece serials. Existing serials keep their prefix. |
+
+The QR address is stored per installation as `Business.label_url`. A blank value falls back to the server's `PIECE_LABEL_URL`, then the placeholder `https://example.com/?wc={code}`. Set a real public website address before distributing labels. Updating this setting changes newly generated labels and reprints, not labels already printed. It does not change the piece serials or the Truck Receiving workflow.
+
+The public page can be on the shop's existing website; a dedicated subdomain and Cloudflare are optional. It does not need access to the private POS. See [Custom labels and receiving](CUSTOM-LABELS.md#your-public-qr-website-address) for setup and testing instructions.
+
+## Register and sales rules
+
 Admins open **File → Register & Sales Rules** (`/settings/register/`), also linked from Business Settings. Every option is a checkbox except the discount percentage. Changes apply on the next request. A policy database read failure stops the request rather than granting default rights. Admins always have all register rights; a cashier PIN uses the shared register login's rights.
 
 | Setting | Existing reference install | New shop |
