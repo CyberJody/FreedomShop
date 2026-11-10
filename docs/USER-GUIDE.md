@@ -1,6 +1,6 @@
 # FreedomShop User Guide
 
-FreedomShop · Point of Sale is a pre-release. This guide follows the implemented screens. For server setup, see [INSTALL.md](../INSTALL.md).
+FreedomShop · Point of Sale is an **early beta**. Bugs and unfinished features are expected; test with sample data before using real records. [Report a problem on GitHub](https://github.com/CyberJody/FreedomShop/issues). This guide follows the implemented screens. For server setup, see [INSTALL.md](../INSTALL.md).
 
 ## Sign in and cashiers
 

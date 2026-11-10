@@ -69,7 +69,7 @@ If you would rather have help, [TechQuest](https://techquest.guru) offers paid s
 
 ## Status and help
 
-**Pre-release.** Try a separate test installation before using real records. Read the [User Guide](docs/USER-GUIDE.md), [exchange format](docs/EXCHANGE.md) and [changelog](CHANGELOG.md).
+**Early beta.** Bugs and unfinished features are expected. Try a separate test installation before using real records. [Report a problem on GitHub](https://github.com/CyberJody/FreedomShop/issues), including your version and steps to reproduce it with sample data. Read the [User Guide](docs/USER-GUIDE.md), [exchange format](docs/EXCHANGE.md) and [changelog](CHANGELOG.md).
 
 The project home is [CyberJody/FreedomShop](https://github.com/CyberJody/FreedomShop) and the website is [freedomshop.app](https://freedomshop.app). [GitHub Issues](https://github.com/CyberJody/FreedomShop/issues) is the public project channel. Notes & Requests stays inside your shop; it does not submit GitHub issues. **File → About FreedomShop** shows the installed version, the license and these links.
 

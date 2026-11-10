@@ -1,6 +1,8 @@
 # Install FreedomShop
 
-FreedomShop is a pre-release. Native Debian 13 installation is the first path; Ubuntu 24.04 is also a packaging target. A `.deb` package and Compose are alternatives. Until the first release is published, run the installer from a clone of the repository instead of a release archive.
+**FreedomShop is an early beta.** Bugs and unfinished features are expected; try a separate test installation before using real records. [Report a problem on GitHub](https://github.com/CyberJody/FreedomShop/issues).
+
+Native Debian 13 installation is the first path; Ubuntu 24.04 is also a packaging target. A `.deb` package and Compose are alternatives. Until the first release is published, run the installer from a clone of the repository instead of a release archive.
 
 ## Network access
 

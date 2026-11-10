@@ -26,7 +26,7 @@
 
 </aside>
 <main>
-<h1>Navigator</h1>{% if request.GET.admin == "off" and not admin_mode %}<div class="notice" style="margin:0 0 12px;padding:9px 12px;background:#fff0b3;border:1px solid #b68719;color:#46330b;font-size:13px">That screen is for admins. Sign in as an admin to open it (<strong>Sign In</strong> / <strong>Sign Out</strong> at the top right or in the <strong>File</strong> menu).</div>{% endif %}
+<h1>Navigator</h1>{% include "early-beta-notice.html" %}{% if request.GET.admin == "off" and not admin_mode %}<div class="notice" style="margin:0 0 12px;padding:9px 12px;background:#fff0b3;border:1px solid #b68719;color:#46330b;font-size:13px">That screen is for admins. Sign in as an admin to open it (<strong>Sign In</strong> / <strong>Sign Out</strong> at the top right or in the <strong>File</strong> menu).</div>{% endif %}
 {% if reorder_count %}<div class="reminder-message" role="status">You have inventory reminders: <a href="/purchasing/reorder/">{{ reorder_count }} item{{ reorder_count|pluralize }} at or below reorder point</a></div>{% endif %}
 <section class="navigator" aria-label="Point of Sale">
 <div class="section-label">Point of Sale</div>
