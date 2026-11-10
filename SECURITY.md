@@ -1,6 +1,6 @@
 # Security policy
 
-FreedomShop is a pre-release. Security fixes currently target the latest development version; there is no supported stable-release series yet.
+FreedomShop is an early beta. Security fixes currently target the latest development version; there is no supported stable-release series yet.
 
 ## Deployment scope
 

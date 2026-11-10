@@ -14,6 +14,6 @@ body{background:var(--brand-tint)}.setup-card{margin:30px auto;padding:24px 28px
 .setup-default{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}/* Enter in a field = this (Next), not a preset or test button */
 @media(max-width:620px){.setup-grid{grid-template-columns:1fr}}</style></head>
 <body><div class="titlebar">FreedomShop <span class="product-subtitle">Point of Sale</span></div>
-<main class="setup-card"><ol class="setup-steps" aria-label="Setup steps">{% for slug, label in steps %}<li class="{% if slug == step %}current{% elif forloop.counter < number %}done{% endif %}"{% if slug == step %} aria-current="step"{% endif %}>{{ label }}</li>{% endfor %}</ol>
+<main class="setup-card">{% include "early-beta-notice.html" %}<ol class="setup-steps" aria-label="Setup steps">{% for slug, label in steps %}<li class="{% if slug == step %}current{% elif forloop.counter < number %}done{% endif %}"{% if slug == step %} aria-current="step"{% endif %}>{{ label }}</li>{% endfor %}</ol>
 <p class="helptext">{% if rerun %}Run Setup Again{% else %}First-Run Setup{% endif %} · Step {{ number }} of {{ total }}{% if rerun %} · Changes save as you go.{% endif %}</p>
 {% block step %}{% endblock %}</main></body></html>
